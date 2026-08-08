@@ -21,7 +21,7 @@
             color: #00ffcc;
             display: flex;
             justify-content: center;
-            height: 100vh;
+            height: 100dvh; /* Zmiana z 100vh na 100dvh dla mobilnych interfejsów */
             overflow: hidden;
         }
 
@@ -183,7 +183,6 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            /* Stylizacja scrollbara w stylu terminala */
             scrollbar-width: thin;
             scrollbar-color: #333 #000;
         }
@@ -201,7 +200,7 @@
             text-transform: uppercase;
         }
 
-        /* Hakerskie kafelki wiadomości (Zamiast miękkich bąbelków) */
+        /* Hakerskie kafelki wiadomości */
         .message {
             max-width: 80%;
             padding: 10px 14px;
@@ -270,6 +269,7 @@
             gap: 10px;
             align-items: center;
             border-top: 1px solid #333;
+            flex-shrink: 0; /* Zabezpieczenie przed ściśnięciem kontenera */
         }
 
         .chat-input-area input[type="text"] {
@@ -385,9 +385,7 @@
     <div id="login-screen" class="screen login-container">
         <h2 class="glitch">PHANTOM_TERMINAL</h2>
         <input type="text" id="username-input" placeholder="> USER_ID (Ty)">
-        
         <input type="text" id="recipient-input" placeholder="> TARGET_ID (Odbiorca)">
-        
         <button id="start-chat-btn">INITIATE_CONNECTION</button>
     </div>
 
@@ -538,7 +536,10 @@
                     .subscribe();
 
                 const roomName = `room_${[currentUser, chatRecipient].sort().join('_')}`;
-                typingChannel = sbClient.channel(roomName);
+                // Jawna konfiguracja dla Broadcast (wymagane dla stabilności sygnału)
+                typingChannel = sbClient.channel(roomName, {
+                    config: { broadcast: { ack: false } }
+                });
                 
                 typingChannel
                     .on('broadcast', { event: 'typing' }, payload => {
@@ -553,13 +554,21 @@
                     .subscribe();
             }
 
+            // Ogranicznik wysyłania (Throttle) - chroni przed zablokowaniem przez serwer
+            let lastTypingTime = 0;
             messageInput.addEventListener('input', () => {
-                if (typingChannel) {
+                if (!typingChannel) return;
+                
+                const now = Date.now();
+                // Wysyłaj sygnał "Pisze..." nie częściej niż co 2 sekundy
+                if (now - lastTypingTime > 2000) {
                     typingChannel.send({
                         type: 'broadcast',
                         event: 'typing',
                         payload: { user: currentUser }
-                    });
+                    }).catch(err => console.log('SYS_ERR: Broadcast Fail', err));
+                    
+                    lastTypingTime = now;
                 }
             });
 
