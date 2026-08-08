@@ -374,6 +374,21 @@
             color: #666;
         }
 
+        /* --- NOWE STYLE DLA KRÓTKOFALÓWKI --- */
+        .voice-btn.recording {
+            background: #ff003c !important;
+            color: white !important;
+            border-color: #ff003c !important;
+            box-shadow: 0 0 10px #ff003c;
+        }
+
+        audio {
+            width: 100%;
+            height: 30px;
+            margin-top: 5px;
+            outline: none;
+        }
+
         .action-sheet {
             position: fixed;
             bottom: -100%;
@@ -474,6 +489,8 @@
             <input type="file" id="image-input" accept="image/*" style="display: none;">
             <button id="attach-btn" title="Wyślij zdjęcie">[I]</button>
             <input type="text" id="message-input" placeholder="> TRANSMIT_DATA...">
+            <!-- NOWE: Przycisk mikrofonu -->
+            <button id="voice-btn" class="voice-btn" title="Wiadomość Głosowa">[M]</button>
             <button id="send-btn">&gt;</button>
         </div>
     </div>
@@ -605,6 +622,7 @@
             const messageInput = document.getElementById('message-input');
             const sendBtn = document.getElementById('send-btn');
             const attachBtn = document.getElementById('attach-btn');
+            const voiceBtn = document.getElementById('voice-btn'); // Dodany uchwyt do DOM
             const imageInput = document.getElementById('image-input');
 
             const actionSheet = document.getElementById('custom-action-sheet');
@@ -749,6 +767,13 @@
                     img.src = decryptedData;
                     contentDiv.appendChild(img);
                     setupLongPress(div, msg, true);
+                } else if (msg.type === 'voice') {
+                    // NOWE: Obsługa odtwarzacza audio w czacie
+                    const audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = decryptedData;
+                    contentDiv.appendChild(audio);
+                    setupLongPress(div, msg, false);
                 } else {
                     contentDiv.textContent = decryptedData;
                     setupLongPress(div, msg, false);
@@ -797,6 +822,7 @@
             sendBtn.addEventListener('click', sendTextMessage);
             messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendTextMessage(); });
             attachBtn.addEventListener('click', () => imageInput.click());
+            
             imageInput.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -807,6 +833,7 @@
                 const { data: publicUrlData } = sbClient.storage.from('chat-images').getPublicUrl(fileName);
                 const encryptedUrl = await encryptData(publicUrlData.publicUrl);
                 await sbClient.from('messages').insert([{ sender: currentUser, recipient: chatRecipient, content: encryptedUrl, type: 'image', reactions: {} }]);
+                imageInput.value = '';
             });
 
             function compressImage(file, maxWidth, quality) {
@@ -829,6 +856,80 @@
                 });
             }
 
+            // --- LOGIKA KRÓTKOFALÓWKI (VOICE) ---
+            let mediaRecorder;
+            let audioChunks = [];
+
+            const startRecording = async (e) => {
+                if (e) e.preventDefault();
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const fileName = `VOICE_${Date.now()}_${Math.random().toString(36).substring(2)}.webm`;
+
+                        // Używamy tego samego bucketu 'chat-images'
+                        const { error: uploadError } = await sbClient.storage
+                            .from('chat-images')
+                            .upload(fileName, blob);
+
+                        if (uploadError) {
+                            alert('VOICE_UPLOAD_ERR: ' + uploadError.message);
+                            return;
+                        }
+
+                        const { data: publicUrlData } = sbClient.storage
+                            .from('chat-images')
+                            .getPublicUrl(fileName);
+
+                        const encryptedUrl = await encryptData(publicUrlData.publicUrl);
+
+                        await sbClient
+                            .from('messages')
+                            .insert([{ 
+                                sender: currentUser, 
+                                recipient: chatRecipient,
+                                content: encryptedUrl, 
+                                type: 'voice',
+                                reactions: {}
+                            }]);
+                        
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    voiceBtn.classList.add('recording');
+                } catch (err) {
+                    alert("SYS_ERR: MICROPHONE_ACCESS_DENIED");
+                }
+            };
+
+            const stopRecording = (e) => {
+                if (e) e.preventDefault();
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    voiceBtn.classList.remove('recording');
+                }
+            };
+
+            // Obsługa kliknięć (mysz)
+            voiceBtn.addEventListener('mousedown', startRecording);
+            voiceBtn.addEventListener('mouseup', stopRecording);
+            voiceBtn.addEventListener('mouseleave', stopRecording);
+            
+            // Obsługa dotyku (telefony)
+            voiceBtn.addEventListener('touchstart', startRecording, {passive: false});
+            voiceBtn.addEventListener('touchend', stopRecording, {passive: false});
+            voiceBtn.addEventListener('touchcancel', stopRecording, {passive: false});
+            // --- KONIEC LOGIKI KRÓTKOFALÓWKI ---
+
             function setupLongPress(element, messageData, isImage) {
                 let pressTimer = null;
                 const start = () => {
@@ -836,7 +937,8 @@
                     pressTimer = setTimeout(() => {
                         selectedMessage = messageData;
                         if (navigator.vibrate) navigator.vibrate(40);
-                        actionSave.style.display = isImage ? 'block' : 'none';
+                        // Pozwalamy pobierać i obrazki i audio
+                        actionSave.style.display = (messageData.type === 'image' || messageData.type === 'voice') ? 'block' : 'none';
                         actionSheet.classList.add('visible');
                     }, 500);
                 };
@@ -859,20 +961,35 @@
             };
 
             actionCancel.addEventListener('click', () => { actionSheet.classList.remove('visible'); selectedMessage = null; });
+            
+            // Odszyfrowywanie do pobrania
             actionSave.addEventListener('click', async () => {
-                if (!selectedMessage || selectedMessage.type !== 'image') return;
+                if (!selectedMessage || (selectedMessage.type !== 'image' && selectedMessage.type !== 'voice')) return;
                 actionSheet.classList.remove('visible');
+
                 try {
                     const decryptedUrl = await decryptData(selectedMessage.content);
+                    if(decryptedUrl === "CORRUPT_DATA") throw new Error("Key Invalid");
+                    
                     const response = await fetch(decryptedUrl);
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
-                    a.href = url; a.download = `ASSET_${Date.now()}.webp`;
-                    document.body.appendChild(a); a.click(); a.remove();
+                    a.href = url;
+                    
+                    // Rozpoznawanie poprawnego rozszerzenia pliku
+                    const ext = selectedMessage.type === 'voice' ? 'webm' : 'webp';
+                    a.download = `ASSET_${Date.now()}.${ext}`;
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
                     window.URL.revokeObjectURL(url);
-                } catch (err) { alert('DOWNLOAD_ERR: KEY_INVALID'); }
+                } catch (err) {
+                    alert('DOWNLOAD_ERR: KEY_INVALID');
+                }
             });
+            
             actionDelete.addEventListener('click', async () => {
                 if (!selectedMessage) return;
                 actionSheet.classList.remove('visible');
