@@ -11,7 +11,6 @@
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* Twarde ramy dla całej strony */
         html, body {
             margin: 0;
             padding: 0;
@@ -28,8 +27,6 @@
             color: #00ffcc;
             display: flex;
             justify-content: center;
-            
-            /* Opcja nuklearna na mobilne paski nawigacji */
             position: fixed;
             top: 0;
             left: 0;
@@ -191,6 +188,20 @@
             font-size: 16px;
         }
 
+        /* NOWE STYLE DLA RADARU OBECNOŚCI */
+        .status-indicator {
+            font-size: 10px;
+            margin-top: 4px;
+            color: #666;
+            transition: 0.3s;
+            font-weight: bold;
+        }
+        
+        .status-indicator.online {
+            color: #00ffcc;
+            text-shadow: 0 0 8px rgba(0, 255, 204, 0.6);
+        }
+
         .typing-indicator {
             font-size: 11px;
             color: #ff003c;
@@ -215,7 +226,7 @@
 
         .messages-list {
             flex: 1 1 auto;
-            min-height: 0; /* ZABEZPIECZENIE: Nie pozwala liście rozpychać układu */
+            min-height: 0;
             padding: 15px;
             overflow-y: auto;
             display: flex;
@@ -306,7 +317,7 @@
             gap: 10px;
             align-items: center;
             border-top: 1px solid #333;
-            flex-shrink: 0; /* ZABEZPIECZENIE 2: Pasek nigdy się nie skurczy i nie ucieknie */
+            flex-shrink: 0;
         }
 
         .chat-input-area input[type="text"] {
@@ -433,6 +444,8 @@
             <button class="back-btn" id="back-btn">&lt; ABORT</button>
             <div class="chat-header-info">
                 <h3 id="chat-title" class="glitch">SECURE_LINK</h3>
+                <!-- NOWY WSKAŹNIK OBECNOŚCI -->
+                <div id="status-indicator" class="status-indicator">[TARGET: OFFLINE]</div>
             </div>
             <div style="width: 40px;"></div>
         </header>
@@ -522,6 +535,7 @@
             const startChatBtn = document.getElementById('start-chat-btn');
             const backBtn = document.getElementById('back-btn');
             const chatTitle = document.getElementById('chat-title');
+            const statusIndicator = document.getElementById('status-indicator');
             const typingIndicator = document.getElementById('typing-indicator');
 
             const messagesList = document.getElementById('messages-list');
@@ -556,6 +570,9 @@
                     return;
                 }
 
+                statusIndicator.textContent = '[TARGET: OFFLINE]';
+                statusIndicator.classList.remove('online');
+
                 loginScreen.classList.add('hidden');
                 chatScreen.classList.remove('hidden');
                 chatTitle.textContent = `LINK: ${chatRecipient}`;
@@ -564,7 +581,10 @@
             });
 
             backBtn.addEventListener('click', () => {
-                if (typingChannel) sbClient.removeChannel(typingChannel);
+                if (typingChannel) {
+                    typingChannel.untrack();
+                    sbClient.removeChannel(typingChannel);
+                }
                 chatScreen.classList.add('hidden');
                 loginScreen.classList.remove('hidden');
                 messagesList.innerHTML = '';
@@ -613,11 +633,39 @@
                     .subscribe();
 
                 const roomName = `room_${[currentUser, chatRecipient].sort().join('_')}`;
+                
+                // Konfiguracja kanału poszerzona o moduł Presence
                 typingChannel = sbClient.channel(roomName, {
-                    config: { broadcast: { ack: false } }
+                    config: { 
+                        broadcast: { ack: false },
+                        presence: { key: currentUser } 
+                    }
                 });
                 
                 typingChannel
+                    .on('presence', { event: 'sync' }, () => {
+                        const newState = typingChannel.presenceState();
+                        let isOnline = false;
+                        
+                        // Sprawdzamy czy odbiorca jest na liście aktywnych obecności
+                        for (const key in newState) {
+                            const presences = newState[key];
+                            for (const p of presences) {
+                                if (p.user === chatRecipient) {
+                                    isOnline = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (isOnline) {
+                            statusIndicator.textContent = '[TARGET: ONLINE]';
+                            statusIndicator.classList.add('online');
+                        } else {
+                            statusIndicator.textContent = '[TARGET: OFFLINE]';
+                            statusIndicator.classList.remove('online');
+                        }
+                    })
                     .on('broadcast', { event: 'typing' }, payload => {
                         if (payload.payload.user === chatRecipient) {
                             typingIndicator.textContent = `[${chatRecipient} IS_TYPING...]`;
@@ -627,7 +675,12 @@
                             }, 2000);
                         }
                     })
-                    .subscribe();
+                    .subscribe(async (status) => {
+                        if (status === 'SUBSCRIBED') {
+                            // Rejestrujemy Twoją obecność na serwerze
+                            await typingChannel.track({ user: currentUser });
+                        }
+                    });
             }
 
             let lastTypingTime = 0;
@@ -886,7 +939,6 @@
             });
         })();
 
-        // LOGIKA AKTUALIZACJI PWA
         let newWorker;
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
