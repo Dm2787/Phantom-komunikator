@@ -5,14 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phantom Terminal</title>
     
-    <!-- Konfiguracja PWA i ikona dla iPhone (iOS) -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0a0a0a">
     <link rel="apple-touch-icon" href="icon-192.png">
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* Hakerski font i tło */
         body {
             margin: 0;
             font-family: 'Courier New', Courier, monospace;
@@ -25,7 +23,6 @@
             overflow: hidden;
         }
 
-        /* Nakładka Scanlines (Efekt CRT monitora) */
         .scanlines {
             position: fixed;
             top: 0;
@@ -45,7 +42,6 @@
             opacity: 0.3;
         }
 
-        /* BANNER AKTUALIZACJI */
         .update-banner {
             position: fixed;
             top: 0;
@@ -71,7 +67,6 @@
             100% { background: rgba(255, 0, 60, 0.9); }
         }
 
-        /* Glitch dla tytułu */
         .glitch {
             position: relative;
             animation: glitch 2s infinite;
@@ -181,7 +176,6 @@
             font-size: 16px;
         }
 
-        /* Wskaźnik Pisze... umieszczony nad polem tekstowym */
         .typing-indicator {
             font-size: 11px;
             color: #ff003c;
@@ -404,12 +398,10 @@
 </head>
 <body>
     
-    <!-- BANNER AKTUALIZACJI -->
     <div id="update-banner" class="update-banner hidden" onclick="rebootApp()">
         [!] SYS_UPDATE_DETECTED - TAP_TO_REBOOT [!]
     </div>
 
-    <!-- Nakładka linii skanowania na cały ekran -->
     <div class="scanlines"></div>
 
     <div id="login-screen" class="screen login-container">
@@ -430,7 +422,6 @@
 
         <div id="messages-list" class="messages-list"></div>
 
-        <!-- Przeniesiony wskaźnik Pisze... -->
         <div id="typing-indicator" class="typing-indicator"></div>
 
         <div class="chat-input-area">
@@ -441,7 +432,6 @@
         </div>
     </div>
 
-    <!-- Menu kontekstowe z reakcjami -->
     <div id="custom-action-sheet" class="action-sheet">
         <div class="reaction-row">
             <span onclick="addReaction('⚠️')">⚠️</span>
@@ -456,7 +446,41 @@
     </div>
 
     <script>
-        let addReaction; 
+        let addReaction;
+        
+        // System Generowania Dźwięku Hakerskiego
+        let audioCtx = null;
+        function playTerminalBeep(silent = false) {
+            try {
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContext();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'square'; // Surowa, sprzętowa fala dźwiękowa
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime); 
+                
+                // Jeśli 'silent' jest true, odtwarzamy to bez głośności (tylko by odblokować Audio w iOS/Android)
+                const volume = silent ? 0 : 0.05; 
+                
+                gain.gain.setValueAtTime(volume, audioCtx.currentTime); 
+                gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1); 
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+            } catch (e) {
+                console.log("SYS_ERR: Audio init fail");
+            }
+        }
 
         (function() {
             const SUPABASE_URL = 'https://quxvvoajvhbutrzuinvf.supabase.co';
@@ -502,6 +526,9 @@
             }
 
             startChatBtn.addEventListener('click', () => {
+                // Odblokowanie kontekstu Audio dla przeglądarek mobilnych po kliknięciu użytkownika
+                playTerminalBeep(true);
+
                 currentUser = usernameInput.value.trim().toUpperCase();
                 chatRecipient = recipientInput.value.trim().toUpperCase();
 
@@ -544,7 +571,7 @@
 
                 messagesList.innerHTML = '';
                 lastDate = null;
-                if (data) data.forEach(msg => appendMessageToDOM(msg));
+                if (data) data.forEach(msg => appendMessageToDOM(msg, true));
                 scrollToBottom();
 
                 sbClient
@@ -554,8 +581,13 @@
                         const isRelevant = (msg.sender === currentUser && msg.recipient === chatRecipient) || 
                                            (msg.sender === chatRecipient && msg.recipient === currentUser);
                         if (isRelevant) {
-                            appendMessageToDOM(msg);
+                            appendMessageToDOM(msg, false);
                             scrollToBottom();
+                            
+                            // Aktywacja Dźwięku: Odtwarzamy beep, jeśli nadawcą jest ktoś inny niż Ty
+                            if (msg.sender !== currentUser) {
+                                playTerminalBeep(false);
+                            }
                         }
                     })
                     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
@@ -601,7 +633,7 @@
                 }
             });
 
-            function appendMessageToDOM(msg) {
+            function appendMessageToDOM(msg, isInitialLoad = false) {
                 if (document.querySelector(`[data-id="${msg.id}"]`)) {
                     updateMessageInDOM(msg);
                     return;
@@ -846,13 +878,10 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').then(reg => {
-                    console.log('SYS_LOG: SW_ACTIVE');
-                    
                     reg.addEventListener('updatefound', () => {
                         newWorker = reg.installing;
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                // Wyświetl czerwony banner systemowy
                                 document.getElementById('update-banner').classList.remove('hidden');
                             }
                         });
