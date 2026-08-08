@@ -316,6 +316,18 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
+        /* NOWE: Style dla statusu [✓] [✓✓] */
+        .msg-status {
+            font-weight: bold;
+            opacity: 0.6;
+            margin-left: 6px;
+        }
+        .msg-status.read {
+            opacity: 1;
+            color: #fff;
+            text-shadow: 0 0 5px #fff;
+        }
+
         .msg-reactions {
             font-size: 12px;
             background: #000;
@@ -518,6 +530,7 @@
             <input type="file" id="image-input" accept="image/*" style="display: none;">
             <button id="attach-btn" title="Wyślij zdjęcie">[I]</button>
             <input type="text" id="message-input" placeholder="> TRANSMIT_DATA...">
+            
             <button id="burn-btn" class="burn-btn" title="Tryb Autodestrukcji">[🔥]</button>
             <button id="voice-btn" class="voice-btn" title="Wiadomość Głosowa">[M]</button>
             <button id="send-btn">&gt;</button>
@@ -783,19 +796,78 @@
                 }
             });
 
-            async function appendMessageToDOM(msg, isInitialLoad = false) {
-                if (document.querySelector(`[data-id="${msg.id}"]`)) return;
-
-                // Sprawdzamy cmentarzysko - jeśli wiadomość tu jest, omijamy proces renderowania!
-                const graveyard = JSON.parse(localStorage.getItem('phantom_graveyard') || '[]');
-                if (graveyard.includes(msg.id)) return;
-
+            // NOWE: Funkcja odpalania odliczania BURN tylko po potwierdzeniu odczytu
+            function checkAndStartBurn(div, msg) {
                 let actualType = msg.type;
                 let isBurnMsg = false;
                 
                 if (actualType && actualType.includes('_burn')) {
-                    actualType = actualType.replace('_burn', '');
                     isBurnMsg = true;
+                }
+
+                if (!isBurnMsg) return;
+                if (div.dataset.burning === "true") return;
+
+                const isRead = msg.reactions && msg.reactions.read;
+                
+                // Odliczanie rusza tylko dla odbiorcy, LUB dla nadawcy po tym jak dostanie powiadomienie "Odczytano"
+                if (msg.sender !== currentUser || isRead) {
+                    div.dataset.burning = "true";
+
+                    const burnTimer = document.createElement('div');
+                    burnTimer.className = 'burn-timer';
+                    burnTimer.textContent = '🔥 [10s]';
+                    div.appendChild(burnTimer);
+
+                    let timeLeft = 10;
+                    const interval = setInterval(async () => {
+                        timeLeft--;
+                        if (timeLeft > 0) {
+                            burnTimer.textContent = `🔥 [0${timeLeft}s]`;
+                        } else {
+                            clearInterval(interval);
+                            burnTimer.textContent = `[ PURGED ]`;
+                            div.classList.add('glitch-out');
+                            
+                            const currentGraveyard = JSON.parse(localStorage.getItem('phantom_graveyard') || '[]');
+                            if (!currentGraveyard.includes(msg.id)) {
+                                currentGraveyard.push(msg.id);
+                                localStorage.setItem('phantom_graveyard', JSON.stringify(currentGraveyard));
+                            }
+
+                            setTimeout(async () => {
+                                div.remove();
+                                if (msg.sender !== currentUser) {
+                                    await sbClient.from('messages').delete().eq('id', msg.id);
+                                }
+                            }, 500);
+                        }
+                    }, 1000);
+                }
+            }
+
+            // NOWE: Zarządzanie wskaźnikami [✓] i [✓✓]
+            function updateMessageStatusUI(msg) {
+                const statusSpan = document.getElementById(`status-${msg.id}`);
+                if (statusSpan && msg.sender === currentUser) {
+                    if (msg.reactions && msg.reactions.read) {
+                        statusSpan.textContent = '[✓✓]';
+                        statusSpan.classList.add('read');
+                    } else {
+                        statusSpan.textContent = '[✓]';
+                    }
+                }
+            }
+
+            async function appendMessageToDOM(msg, isInitialLoad = false) {
+                if (document.querySelector(`[data-id="${msg.id}"]`)) return;
+
+                const graveyard = JSON.parse(localStorage.getItem('phantom_graveyard') || '[]');
+                if (graveyard.includes(msg.id)) return;
+
+                let actualType = msg.type;
+                if (actualType && actualType.includes('_burn')) {
+                    actualType = actualType.replace('_burn', '');
                 }
 
                 const decryptedData = await decryptData(msg.content);
@@ -843,49 +915,33 @@
 
                 const timeDiv = document.createElement('div');
                 timeDiv.className = 'msg-time';
-                timeDiv.textContent = `[${formatTime(msg.created_at)}]`;
+                // Wstawianie spanu ze statusem
+                timeDiv.innerHTML = `[${formatTime(msg.created_at)}] <span class="msg-status" id="status-${msg.id}"></span>`;
                 div.appendChild(timeDiv);
 
-                if (isBurnMsg && decryptedData !== "CORRUPT_DATA") {
-                    const burnTimer = document.createElement('div');
-                    burnTimer.className = 'burn-timer';
-                    burnTimer.textContent = '🔥 [10s]';
-                    div.appendChild(burnTimer);
-
-                    let timeLeft = 10;
-                    const interval = setInterval(async () => {
-                        timeLeft--;
-                        if (timeLeft > 0) {
-                            burnTimer.textContent = `🔥 [0${timeLeft}s]`;
-                        } else {
-                            clearInterval(interval);
-                            burnTimer.textContent = `[ PURGED ]`;
-                            div.classList.add('glitch-out');
-                            
-                            // Zapisujemy ID do cmentarzyska, żeby wiadomość nie wróciła po odświeżeniu
-                            const currentGraveyard = JSON.parse(localStorage.getItem('phantom_graveyard') || '[]');
-                            if (!currentGraveyard.includes(msg.id)) {
-                                currentGraveyard.push(msg.id);
-                                localStorage.setItem('phantom_graveyard', JSON.stringify(currentGraveyard));
-                            }
-
-                            setTimeout(async () => {
-                                div.remove();
-                                if (msg.sender !== currentUser) {
-                                    await sbClient.from('messages').delete().eq('id', msg.id);
-                                }
-                            }, 500);
-                        }
-                    }, 1000);
-                }
-
                 messagesList.appendChild(div);
+                
                 renderReactions(div, msg.reactions);
+                updateMessageStatusUI(msg);
+                checkAndStartBurn(div, msg);
+
+                // NOWE: Logika cichego potwierdzania odczytu przez odbiorcę
+                if (msg.sender !== currentUser && (!msg.reactions || !msg.reactions.read)) {
+                    setTimeout(async () => {
+                        const currentReactions = msg.reactions || {};
+                        currentReactions.read = true;
+                        await sbClient.from('messages').update({ reactions: currentReactions }).eq('id', msg.id);
+                    }, Math.random() * 2000); // Losowe opóźnienie do 2s by nie przeciążyć serwera przy ładowaniu starych logów
+                }
             }
 
             function updateMessageInDOM(msg) {
                 const div = document.querySelector(`[data-id="${msg.id}"]`);
-                if (div) renderReactions(div, msg.reactions);
+                if (div) {
+                    renderReactions(div, msg.reactions);
+                    updateMessageStatusUI(msg);
+                    checkAndStartBurn(div, msg);
+                }
             }
 
             function renderReactions(div, reactions) {
@@ -894,8 +950,18 @@
                     if (reactDiv) reactDiv.style.display = 'none';
                     return;
                 }
-                reactDiv.textContent = Object.values(reactions).join(' ');
-                reactDiv.style.display = 'block';
+                
+                // Ukrywamy parametr 'read' przed wyświetleniem jako ikonka
+                const emojis = Object.entries(reactions)
+                    .filter(([key, val]) => key !== 'read')
+                    .map(([key, val]) => val);
+                    
+                if (emojis.length > 0) {
+                    reactDiv.textContent = emojis.join(' ');
+                    reactDiv.style.display = 'block';
+                } else {
+                    reactDiv.style.display = 'none';
+                }
             }
 
             function scrollToBottom() { messagesList.scrollTop = messagesList.scrollHeight; }
