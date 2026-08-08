@@ -1,4 +1,4 @@
-const CACHE_NAME = 'phantom-cache-v1';
+const CACHE_NAME = 'phantom-cache-v1'; // ZMIEŃ TEN NUMER przy każdej aktualizacji (np. v2, v3)
 const assetsToCache = [
   './index.html',
   './manifest.json',
@@ -6,17 +6,22 @@ const assetsToCache = [
   './icon-512.png'
 ];
 
-// Instalacja Service Workera i buforowanie plików
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(assetsToCache);
     })
   );
-  self.skipWaiting();
+  // Czeka na sygnał od użytkownika (kliknięcie w banner), nie wymusza restartu w trakcie pisania
 });
 
-// Aktywacja i czyszczenie starych wersji pamięci podręcznej
+// Nasłuchiwanie komendy "REBOOT" z pliku index.html
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
@@ -32,10 +37,8 @@ self.addEventListener('activate', (e) => {
   self.clientsClaim();
 });
 
-// Przechwytywanie żądań (pomijamy Supabase, żeby wiadomości szły na żywo z sieci)
 self.addEventListener('fetch', (e) => {
   if (e.request.url.includes('supabase.co')) return;
-
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
       return cachedResponse || fetch(e.request);
