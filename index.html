@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phantom Terminal</title>
     
+    <!-- Konfiguracja PWA i ikona dla iPhone (iOS) -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0a0a0a">
     <link rel="apple-touch-icon" href="icon-192.png">
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
+        /* Hakerski font i tło */
         body {
             margin: 0;
             font-family: 'Courier New', Courier, monospace;
@@ -23,6 +25,7 @@
             overflow: hidden;
         }
 
+        /* Nakładka Scanlines (Efekt CRT monitora) */
         .scanlines {
             position: fixed;
             top: 0;
@@ -68,6 +71,7 @@
             100% { background: rgba(255, 0, 60, 0.9); }
         }
 
+        /* Glitch dla tytułu */
         .glitch {
             position: relative;
             animation: glitch 2s infinite;
@@ -177,11 +181,12 @@
             font-size: 16px;
         }
 
+        /* Wskaźnik Pisze... umieszczony nad polem tekstowym */
         .typing-indicator {
             font-size: 11px;
             color: #ff003c;
-            height: 14px;
-            margin-top: 2px;
+            min-height: 14px;
+            padding: 0 15px 8px 15px;
             animation: blink 1s infinite;
         }
         
@@ -419,12 +424,14 @@
             <button class="back-btn" id="back-btn">&lt; ABORT</button>
             <div class="chat-header-info">
                 <h3 id="chat-title" class="glitch">SECURE_LINK</h3>
-                <div id="typing-indicator" class="typing-indicator"></div>
             </div>
             <div style="width: 40px;"></div>
         </header>
 
         <div id="messages-list" class="messages-list"></div>
+
+        <!-- Przeniesiony wskaźnik Pisze... -->
+        <div id="typing-indicator" class="typing-indicator"></div>
 
         <div class="chat-input-area">
             <input type="file" id="image-input" accept="image/*" style="display: none;">
@@ -861,7 +868,6 @@
             });
         }
 
-        // Funkcja wywoływana po kliknięciu w banner
         function rebootApp() {
             if (newWorker) {
                 newWorker.postMessage('SKIP_WAITING');
