@@ -5,14 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phantom Terminal</title>
     
-    <!-- Konfiguracja PWA i ikona dla iPhone (iOS) -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0a0a0a">
     <link rel="apple-touch-icon" href="icon-192.png">
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* Hakerski font i tło */
         body {
             margin: 0;
             font-family: 'Courier New', Courier, monospace;
@@ -21,11 +19,10 @@
             color: #00ffcc;
             display: flex;
             justify-content: center;
-            height: 100dvh; /* Zmiana z 100vh na 100dvh dla mobilnych interfejsów */
+            height: 100dvh;
             overflow: hidden;
         }
 
-        /* Nakładka Scanlines (Efekt CRT monitora) */
         .scanlines {
             position: fixed;
             top: 0;
@@ -45,7 +42,32 @@
             opacity: 0.3;
         }
 
-        /* Glitch dla tytułu */
+        /* BANNER AKTUALIZACJI */
+        .update-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255, 0, 60, 0.9);
+            color: #050505;
+            text-align: center;
+            padding: 12px;
+            font-weight: bold;
+            font-size: 14px;
+            z-index: 10000;
+            cursor: pointer;
+            box-sizing: border-box;
+            border-bottom: 2px solid #ff003c;
+            text-transform: uppercase;
+            box-shadow: 0 5px 20px rgba(255, 0, 60, 0.4);
+            animation: alertPulse 1.5s infinite;
+        }
+        @keyframes alertPulse {
+            0% { background: rgba(255, 0, 60, 0.9); }
+            50% { background: rgba(200, 0, 40, 0.9); }
+            100% { background: rgba(255, 0, 60, 0.9); }
+        }
+
         .glitch {
             position: relative;
             animation: glitch 2s infinite;
@@ -200,7 +222,6 @@
             text-transform: uppercase;
         }
 
-        /* Hakerskie kafelki wiadomości */
         .message {
             max-width: 80%;
             padding: 10px 14px;
@@ -269,7 +290,7 @@
             gap: 10px;
             align-items: center;
             border-top: 1px solid #333;
-            flex-shrink: 0; /* Zabezpieczenie przed ściśnięciem kontenera */
+            flex-shrink: 0;
         }
 
         .chat-input-area input[type="text"] {
@@ -313,7 +334,6 @@
             color: #666;
         }
 
-        /* Hakerskie Menu Akcji */
         .action-sheet {
             position: fixed;
             bottom: -100%;
@@ -379,6 +399,11 @@
 </head>
 <body>
     
+    <!-- BANNER AKTUALIZACJI -->
+    <div id="update-banner" class="update-banner hidden" onclick="rebootApp()">
+        [!] SYS_UPDATE_DETECTED - TAP_TO_REBOOT [!]
+    </div>
+
     <!-- Nakładka linii skanowania na cały ekran -->
     <div class="scanlines"></div>
 
@@ -536,7 +561,6 @@
                     .subscribe();
 
                 const roomName = `room_${[currentUser, chatRecipient].sort().join('_')}`;
-                // Jawna konfiguracja dla Broadcast (wymagane dla stabilności sygnału)
                 typingChannel = sbClient.channel(roomName, {
                     config: { broadcast: { ack: false } }
                 });
@@ -554,13 +578,11 @@
                     .subscribe();
             }
 
-            // Ogranicznik wysyłania (Throttle) - chroni przed zablokowaniem przez serwer
             let lastTypingTime = 0;
             messageInput.addEventListener('input', () => {
                 if (!typingChannel) return;
                 
                 const now = Date.now();
-                // Wysyłaj sygnał "Pisze..." nie częściej niż co 2 sekundy
                 if (now - lastTypingTime > 2000) {
                     typingChannel.send({
                         type: 'broadcast',
@@ -599,7 +621,6 @@
                     contentDiv.appendChild(img);
                     setupLongPress(div, msg, true);
                 } else {
-                    // Maszynowe wpisywanie przy nowych wiadomościach (dla klimatu)
                     contentDiv.textContent = msg.content;
                     setupLongPress(div, msg, false);
                 }
@@ -813,12 +834,38 @@
             });
         })();
 
+        // LOGIKA AKTUALIZACJI PWA
+        let newWorker;
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(() => console.log('SYS_LOG: SW_ACTIVE'))
-                    .catch(err => console.log('SYS_ERR: SW_FAIL', err));
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('SYS_LOG: SW_ACTIVE');
+                    
+                    reg.addEventListener('updatefound', () => {
+                        newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // Wyświetl czerwony banner systemowy
+                                document.getElementById('update-banner').classList.remove('hidden');
+                            }
+                        });
+                    });
+                }).catch(err => console.log('SYS_ERR: SW_FAIL', err));
+
+                let refreshing;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    refreshing = true;
+                    window.location.reload();
+                });
             });
+        }
+
+        // Funkcja wywoływana po kliknięciu w banner
+        function rebootApp() {
+            if (newWorker) {
+                newWorker.postMessage('SKIP_WAITING');
+            }
         }
     </script>
 </body>
