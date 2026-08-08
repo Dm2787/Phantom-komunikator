@@ -316,7 +316,6 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
-        /* NOWE: Style dla statusu [✓] [✓✓] */
         .msg-status {
             font-weight: bold;
             opacity: 0.6;
@@ -552,8 +551,8 @@
 
     <script>
         let addReaction;
-        
         let audioCtx = null;
+
         function playTerminalBeep(silent = false) {
             try {
                 if (!audioCtx) {
@@ -584,6 +583,51 @@
                 console.log("SYS_ERR: Audio init fail");
             }
         }
+
+        // --- CYFROWY DŹWIĘK BŁĘDU (HACKER GLITCH) ---
+        function playGlitchSound() {
+            try {
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContext();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                
+                const now = audioCtx.currentTime;
+                
+                // Używamy fali piłokształtnej - brzmi bardzo cyfrowo i ostro (jak retro konsola)
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sawtooth';
+                
+                const gain = audioCtx.createGain();
+                
+                // Szybkie przeskoki głośności (jąkanie się sygnału)
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.setValueAtTime(0, now + 0.04);
+                gain.gain.setValueAtTime(0.05, now + 0.08);
+                gain.gain.setValueAtTime(0, now + 0.12);
+                gain.gain.setValueAtTime(0.08, now + 0.15);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                
+                // Dziki, nienaturalny skok częstotliwości (cyfrowe zniekształcenie)
+                osc.frequency.setValueAtTime(600, now);          // Zaczyna średnio
+                osc.frequency.setValueAtTime(1500, now + 0.04);  // Skok w górę
+                osc.frequency.setValueAtTime(300, now + 0.08);   // Twardy dół
+                osc.frequency.setValueAtTime(2500, now + 0.15);  // Pisk
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.35); // Błyskawiczny zjazd w dół
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start(now);
+                osc.stop(now + 0.4);
+            } catch (e) {
+                console.log("SYS_ERR: Glitch audio fail");
+            }
+        }
+        // ---------------------------------------------
 
         (function() {
             const SUPABASE_URL = 'https://quxvvoajvhbutrzuinvf.supabase.co';
@@ -796,7 +840,6 @@
                 }
             });
 
-            // NOWE: Funkcja odpalania odliczania BURN tylko po potwierdzeniu odczytu
             function checkAndStartBurn(div, msg) {
                 let actualType = msg.type;
                 let isBurnMsg = false;
@@ -810,7 +853,6 @@
 
                 const isRead = msg.reactions && msg.reactions.read;
                 
-                // Odliczanie rusza tylko dla odbiorcy, LUB dla nadawcy po tym jak dostanie powiadomienie "Odczytano"
                 if (msg.sender !== currentUser || isRead) {
                     div.dataset.burning = "true";
 
@@ -827,6 +869,9 @@
                         } else {
                             clearInterval(interval);
                             burnTimer.textContent = `[ PURGED ]`;
+                            
+                            playGlitchSound();
+                            
                             div.classList.add('glitch-out');
                             
                             const currentGraveyard = JSON.parse(localStorage.getItem('phantom_graveyard') || '[]');
@@ -846,7 +891,6 @@
                 }
             }
 
-            // NOWE: Zarządzanie wskaźnikami [✓] i [✓✓]
             function updateMessageStatusUI(msg) {
                 const statusSpan = document.getElementById(`status-${msg.id}`);
                 if (statusSpan && msg.sender === currentUser) {
@@ -915,7 +959,6 @@
 
                 const timeDiv = document.createElement('div');
                 timeDiv.className = 'msg-time';
-                // Wstawianie spanu ze statusem
                 timeDiv.innerHTML = `[${formatTime(msg.created_at)}] <span class="msg-status" id="status-${msg.id}"></span>`;
                 div.appendChild(timeDiv);
 
@@ -925,13 +968,12 @@
                 updateMessageStatusUI(msg);
                 checkAndStartBurn(div, msg);
 
-                // NOWE: Logika cichego potwierdzania odczytu przez odbiorcę
                 if (msg.sender !== currentUser && (!msg.reactions || !msg.reactions.read)) {
                     setTimeout(async () => {
                         const currentReactions = msg.reactions || {};
                         currentReactions.read = true;
                         await sbClient.from('messages').update({ reactions: currentReactions }).eq('id', msg.id);
-                    }, Math.random() * 2000); // Losowe opóźnienie do 2s by nie przeciążyć serwera przy ładowaniu starych logów
+                    }, Math.random() * 2000); 
                 }
             }
 
@@ -951,7 +993,6 @@
                     return;
                 }
                 
-                // Ukrywamy parametr 'read' przed wyświetleniem jako ikonka
                 const emojis = Object.entries(reactions)
                     .filter(([key, val]) => key !== 'read')
                     .map(([key, val]) => val);
