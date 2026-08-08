@@ -160,6 +160,7 @@
             cursor: pointer;
             text-transform: uppercase;
             transition: 0.3s;
+            margin-top: 10px;
         }
         
         .login-container button:hover {
@@ -188,7 +189,6 @@
             font-size: 16px;
         }
 
-        /* NOWE STYLE DLA RADARU OBECNOŚCI */
         .status-indicator {
             font-size: 10px;
             margin-top: 4px;
@@ -275,6 +275,20 @@
             border-right-color: #ff003c;
             color: #ff003c;
             text-align: right;
+        }
+
+        /* Styl dla zepsutej, nieodszyfrowanej wiadomości */
+        .message .corrupted {
+            color: #ff003c;
+            font-style: italic;
+            text-shadow: 2px 0 2px rgba(255,0,0,0.5), -2px 0 2px rgba(0,255,255,0.5);
+            animation: glitch-text 0.5s infinite;
+        }
+
+        @keyframes glitch-text {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; transform: skewX(-5deg); }
+            100% { opacity: 1; transform: skewX(0); }
         }
 
         .message img {
@@ -436,6 +450,10 @@
         <h2 class="glitch">PHANTOM_TERMINAL</h2>
         <input type="text" id="username-input" placeholder="> USER_ID (Ty)">
         <input type="text" id="recipient-input" placeholder="> TARGET_ID (Odbiorca)">
+        
+        <!-- NOWE: Wymagany PIN do Szyfrowania Seryjnego -->
+        <input type="password" id="secret-pin-input" placeholder="> ENCRYPTION_KEY (PIN)">
+        
         <button id="start-chat-btn">INITIATE_CONNECTION</button>
     </div>
 
@@ -444,7 +462,6 @@
             <button class="back-btn" id="back-btn">&lt; ABORT</button>
             <div class="chat-header-info">
                 <h3 id="chat-title" class="glitch">SECURE_LINK</h3>
-                <!-- NOWY WSKAŹNIK OBECNOŚCI -->
                 <div id="status-indicator" class="status-indicator">[TARGET: OFFLINE]</div>
             </div>
             <div style="width: 40px;"></div>
@@ -478,6 +495,63 @@
     <script>
         let addReaction;
         
+        // --- 1. SILNIK KRYPTOGRAFICZNY (Web Crypto API) ---
+        let cryptoKey = null;
+        const SALT = "PHANTOM_TERMINAL_2026_SALT"; // Stała sól dla ułatwienia parowania
+
+        // Funkcja generująca prawdziwy klucz szyfrujący (AES-GCM) na podstawie hasła
+        async function setupCryptoKey(pin) {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", enc.encode(pin), { name: "PBKDF2" }, false, ["deriveKey"]
+            );
+            cryptoKey = await crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: enc.encode(SALT), iterations: 100000, hash: "SHA-256" },
+                keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+            );
+        }
+
+        // Szyfrowanie danych w locie
+        async function encryptData(text) {
+            if (!cryptoKey) return text; // Zabezpieczenie przed błędem
+            const enc = new TextEncoder();
+            const iv = crypto.getRandomValues(new Uint8Array(12)); // Losowy wektor dla bezpieczeństwa
+            const cipher = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                cryptoKey,
+                enc.encode(text)
+            );
+            
+            // Łączenie IV i Ciphertext, a następnie zamiana na Base64
+            const payload = new Uint8Array(iv.length + cipher.byteLength);
+            payload.set(iv, 0);
+            payload.set(new Uint8Array(cipher), iv.length);
+            return btoa(String.fromCharCode(...payload));
+        }
+
+        // Odszyfrowywanie (jeśli błędny klucz - zwraca błąd wizualny)
+        async function decryptData(base64Str) {
+            if (!cryptoKey) return "[KEY_MISSING]";
+            try {
+                const raw = atob(base64Str);
+                const payload = new Uint8Array(new ArrayBuffer(raw.length));
+                for (let i = 0; i < raw.length; i++) payload[i] = raw.charCodeAt(i);
+                
+                const iv = payload.slice(0, 12);
+                const data = payload.slice(12);
+                
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: iv },
+                    cryptoKey,
+                    data
+                );
+                return new TextDecoder().decode(decrypted);
+            } catch (e) {
+                return "CORRUPT_DATA"; // Hasło było błędne
+            }
+        }
+        // --- KONIEC SILNIKA KRYPTOGRAFICZNEGO ---
+
         let audioCtx = null;
         function playTerminalBeep(silent = false) {
             try {
@@ -523,6 +597,7 @@
 
             let currentUser = '';
             let chatRecipient = '';
+            let secretPin = '';
             let selectedMessage = null;
             let lastDate = null;
             let typingChannel = null;
@@ -532,6 +607,7 @@
             const chatScreen = document.getElementById('chat-screen');
             const usernameInput = document.getElementById('username-input');
             const recipientInput = document.getElementById('recipient-input');
+            const secretPinInput = document.getElementById('secret-pin-input');
             const startChatBtn = document.getElementById('start-chat-btn');
             const backBtn = document.getElementById('back-btn');
             const chatTitle = document.getElementById('chat-title');
@@ -554,14 +630,15 @@
                 return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             }
 
-            startChatBtn.addEventListener('click', () => {
+            startChatBtn.addEventListener('click', async () => {
                 playTerminalBeep(true);
 
                 currentUser = usernameInput.value.trim().toUpperCase();
                 chatRecipient = recipientInput.value.trim().toUpperCase();
+                secretPin = secretPinInput.value.trim();
 
-                if (!currentUser || !chatRecipient) {
-                    alert('SYS_WARN: IDENTIFICATION REQUIRED');
+                if (!currentUser || !chatRecipient || !secretPin) {
+                    alert('SYS_WARN: ALL FIELDS (INCLUDING PIN) REQUIRED');
                     return;
                 }
 
@@ -569,6 +646,9 @@
                     alert('SYS_ERR: DB_OFFLINE');
                     return;
                 }
+
+                // Generowanie klucza przed wejściem do bazy!
+                await setupCryptoKey(secretPin);
 
                 statusIndicator.textContent = '[TARGET: OFFLINE]';
                 statusIndicator.classList.remove('online');
@@ -585,10 +665,12 @@
                     typingChannel.untrack();
                     sbClient.removeChannel(typingChannel);
                 }
+                cryptoKey = null; // Usuwanie klucza z pamięci podręcznej RAM dla bezpieczeństwa
                 chatScreen.classList.add('hidden');
                 loginScreen.classList.remove('hidden');
                 messagesList.innerHTML = '';
                 typingIndicator.textContent = '';
+                secretPinInput.value = '';
             });
 
             async function initChat() {
@@ -605,17 +687,23 @@
 
                 messagesList.innerHTML = '';
                 lastDate = null;
-                if (data) data.forEach(msg => appendMessageToDOM(msg, true));
+                
+                // Odszyfrowywanie historii musi odbywać się synchronicznie
+                if (data) {
+                    for (const msg of data) {
+                        await appendMessageToDOM(msg, true);
+                    }
+                }
                 scrollToBottom();
 
                 sbClient
                     .channel('public:messages')
-                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async payload => {
                         const msg = payload.new;
                         const isRelevant = (msg.sender === currentUser && msg.recipient === chatRecipient) || 
                                            (msg.sender === chatRecipient && msg.recipient === currentUser);
                         if (isRelevant) {
-                            appendMessageToDOM(msg, false);
+                            await appendMessageToDOM(msg, false);
                             scrollToBottom();
                             
                             if (msg.sender !== currentUser) {
@@ -633,31 +721,22 @@
                     .subscribe();
 
                 const roomName = `room_${[currentUser, chatRecipient].sort().join('_')}`;
-                
-                // Konfiguracja kanału poszerzona o moduł Presence
                 typingChannel = sbClient.channel(roomName, {
-                    config: { 
-                        broadcast: { ack: false },
-                        presence: { key: currentUser } 
-                    }
+                    config: { broadcast: { ack: false }, presence: { key: currentUser } }
                 });
                 
                 typingChannel
                     .on('presence', { event: 'sync' }, () => {
                         const newState = typingChannel.presenceState();
                         let isOnline = false;
-                        
-                        // Sprawdzamy czy odbiorca jest na liście aktywnych obecności
                         for (const key in newState) {
-                            const presences = newState[key];
-                            for (const p of presences) {
+                            for (const p of newState[key]) {
                                 if (p.user === chatRecipient) {
                                     isOnline = true;
                                     break;
                                 }
                             }
                         }
-
                         if (isOnline) {
                             statusIndicator.textContent = '[TARGET: ONLINE]';
                             statusIndicator.classList.add('online');
@@ -676,34 +755,28 @@
                         }
                     })
                     .subscribe(async (status) => {
-                        if (status === 'SUBSCRIBED') {
-                            // Rejestrujemy Twoją obecność na serwerze
-                            await typingChannel.track({ user: currentUser });
-                        }
+                        if (status === 'SUBSCRIBED') await typingChannel.track({ user: currentUser });
                     });
             }
 
             let lastTypingTime = 0;
             messageInput.addEventListener('input', () => {
                 if (!typingChannel) return;
-                
                 const now = Date.now();
                 if (now - lastTypingTime > 2000) {
-                    typingChannel.send({
-                        type: 'broadcast',
-                        event: 'typing',
-                        payload: { user: currentUser }
-                    }).catch(err => console.log('SYS_ERR: Broadcast Fail', err));
-                    
+                    typingChannel.send({ type: 'broadcast', event: 'typing', payload: { user: currentUser } }).catch(() => {});
                     lastTypingTime = now;
                 }
             });
 
-            function appendMessageToDOM(msg, isInitialLoad = false) {
+            async function appendMessageToDOM(msg, isInitialLoad = false) {
                 if (document.querySelector(`[data-id="${msg.id}"]`)) {
                     updateMessageInDOM(msg);
                     return;
                 }
+
+                // ODSZYFROWYWANIE DANYCH Z BAZY
+                const decryptedData = await decryptData(msg.content);
 
                 const msgDate = new Date(msg.created_at).toLocaleDateString();
                 if (msgDate !== lastDate) {
@@ -720,15 +793,22 @@
                 div.setAttribute('data-id', msg.id);
 
                 const contentDiv = document.createElement('div');
-                if (msg.type === 'image') {
+                
+                // Jeśli klucz jest zły, blokujemy zawartość
+                if (decryptedData === "CORRUPT_DATA") {
+                    contentDiv.className = "corrupted";
+                    contentDiv.textContent = "[ENCRYPTED_DATA_UNREADABLE]";
+                } 
+                else if (msg.type === 'image') {
                     const img = document.createElement('img');
-                    img.src = msg.content;
+                    img.src = decryptedData; // Wstawiamy odszyfrowany URL
                     contentDiv.appendChild(img);
                     setupLongPress(div, msg, true);
                 } else {
-                    contentDiv.textContent = msg.content;
+                    contentDiv.textContent = decryptedData;
                     setupLongPress(div, msg, false);
                 }
+                
                 div.appendChild(contentDiv);
 
                 const reactDiv = document.createElement('div');
@@ -771,20 +851,21 @@
             async function sendTextMessage() {
                 const text = messageInput.value.trim();
                 if (!text) return;
+                
+                messageInput.value = ''; // Czyścimy od razu żeby UI było szybkie
+                
+                // SZYFROWANIE PRZED WYSYŁKĄ
+                const encryptedText = await encryptData(text);
 
                 const { error } = await sbClient
                     .from('messages')
                     .insert([{ 
                         sender: currentUser, 
                         recipient: chatRecipient, 
-                        content: text, 
+                        content: encryptedText, // Baza dostaje tylko śmieci
                         type: 'text',
                         reactions: {} 
                     }]);
-
-                if (!error) {
-                    messageInput.value = '';
-                }
             }
 
             sendBtn.addEventListener('click', sendTextMessage);
@@ -814,12 +895,15 @@
                     .from('chat-images')
                     .getPublicUrl(fileName);
 
+                // Szyfrujemy publiczny URL zdjęcia przed wysyłką!
+                const encryptedUrl = await encryptData(publicUrlData.publicUrl);
+
                 await sbClient
                     .from('messages')
                     .insert([{ 
                         sender: currentUser, 
                         recipient: chatRecipient,
-                        content: publicUrlData.publicUrl, 
+                        content: encryptedUrl, 
                         type: 'image',
                         reactions: {}
                     }]);
@@ -906,12 +990,16 @@
                 selectedMessage = null;
             });
 
+            // Odszyfrowywanie do pobrania
             actionSave.addEventListener('click', async () => {
                 if (!selectedMessage || selectedMessage.type !== 'image') return;
                 actionSheet.classList.remove('visible');
 
                 try {
-                    const response = await fetch(selectedMessage.content);
+                    const decryptedUrl = await decryptData(selectedMessage.content);
+                    if(decryptedUrl === "CORRUPT_DATA") throw new Error("Key Invalid");
+                    
+                    const response = await fetch(decryptedUrl);
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -922,7 +1010,7 @@
                     a.remove();
                     window.URL.revokeObjectURL(url);
                 } catch (err) {
-                    alert('DOWNLOAD_ERR');
+                    alert('DOWNLOAD_ERR: KEY_INVALID');
                 }
             });
 
