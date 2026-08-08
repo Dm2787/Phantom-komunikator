@@ -493,7 +493,6 @@
             <button id="attach-btn" title="Wyślij zdjęcie">[I]</button>
             <input type="text" id="message-input" placeholder="> TRANSMIT_DATA...">
             
-            <!-- NOWE: Przycisk mikrofonu -->
             <button id="voice-btn" class="voice-btn" title="Wiadomość Głosowa">[M]</button>
             
             <button id="send-btn">&gt;</button>
@@ -627,7 +626,7 @@
             const messageInput = document.getElementById('message-input');
             const sendBtn = document.getElementById('send-btn');
             const attachBtn = document.getElementById('attach-btn');
-            const voiceBtn = document.getElementById('voice-btn'); // Nowy uchwyt
+            const voiceBtn = document.getElementById('voice-btn'); 
             const imageInput = document.getElementById('image-input');
 
             const actionSheet = document.getElementById('custom-action-sheet');
@@ -774,13 +773,12 @@
                     contentDiv.appendChild(img);
                     setupLongPress(div, msg, true);
                 } else if (msg.type === 'voice') {
-                    // DODANO WSPARCIE ODTWARZACZA
                     const audio = document.createElement('audio');
                     audio.controls = true;
                     audio.src = decryptedData;
                     audio.onerror = () => console.log("SYS_ERR: AUDIO_DECODE_FAIL");
                     contentDiv.appendChild(audio);
-                    setupLongPress(div, msg, true); // Zezwalamy na pobranie
+                    setupLongPress(div, msg, true); 
                 } else {
                     contentDiv.textContent = decryptedData;
                     setupLongPress(div, msg, false);
@@ -864,7 +862,7 @@
                 });
             }
 
-            // --- NOWA, KOMPLETNA LOGIKA KRÓTKOFALÓWKI ---
+            // --- LOGIKA KRÓTKOFALÓWKI ---
             let mediaRecorder;
             let audioChunks = [];
             let recordStartTime = 0;
@@ -873,7 +871,6 @@
                 if (e) e.preventDefault();
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    // Detekcja najlepszego formatu dla urządzenia
                     const mimeType = (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/mp4')) ? 'audio/mp4' : 'audio/webm';
                     
                     mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
@@ -888,7 +885,6 @@
                         const duration = Date.now() - recordStartTime;
                         stream.getTracks().forEach(track => track.stop());
                         
-                        // Zabezpieczenie przed mikrokliknięciami (mniej niż 1 sekunda ignorowane)
                         if (duration < 1000) { return; }
 
                         const finalMime = mediaRecorder.mimeType || 'audio/webm';
@@ -944,7 +940,6 @@
             voiceBtn.addEventListener('touchstart', startRecording, {passive: false});
             voiceBtn.addEventListener('touchend', stopRecording, {passive: false});
             voiceBtn.addEventListener('touchcancel', stopRecording, {passive: false});
-            // --- KONIEC LOGIKI KRÓTKOFALÓWKI ---
 
             function setupLongPress(element, messageData, isMedia) {
                 let pressTimer = null;
@@ -1009,6 +1004,31 @@
                 await sbClient.from('messages').delete().eq('id', selectedMessage.id);
                 selectedMessage = null;
             });
+
+            // --- SYSTEM WZNAWIANIA POŁĄCZENIA PO WYBUDZENIU EKRANU ---
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'visible' && !document.getElementById('chat-screen').classList.contains('hidden')) {
+                    
+                    const { data, error } = await sbClient
+                        .from('messages')
+                        .select('*')
+                        .or(`and(sender.eq.${currentUser},recipient.eq.${chatRecipient}),and(sender.eq.${chatRecipient},recipient.eq.${currentUser})`)
+                        .order('created_at', { ascending: true });
+
+                    if (data) {
+                        for (const msg of data) {
+                            await appendMessageToDOM(msg, true);
+                        }
+                        scrollToBottom();
+                    }
+                    
+                    if (typingChannel) {
+                        await typingChannel.track({ user: currentUser });
+                    }
+                }
+            });
+            // ---------------------------------------------------------
+
         })();
 
         let newWorker;
