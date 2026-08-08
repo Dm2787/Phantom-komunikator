@@ -1,4 +1,4 @@
-const CACHE_NAME = 'phantom-cache-v14'; // ZMIEŃ TEN NUMER przy każdej aktualizacji (np. v2, v3)
+const CACHE_NAME = 'phantom-cache-v15'; // ZMIEŃ TEN NUMER przy każdej aktualizacji (np. v2, v3)
 const assetsToCache = [
   './index.html',
   './manifest.json',
