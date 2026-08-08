@@ -260,6 +260,13 @@
             gap: 4px;
             border-left: 2px solid transparent;
             border-right: 2px solid transparent;
+            
+            /* NOWE: Całkowita blokada zaznaczania tekstu i natywnego popupu systemu */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .message.incoming {
@@ -374,7 +381,6 @@
             color: #666;
         }
 
-        /* --- NOWE STYLE DLA KRÓTKOFALÓWKI --- */
         .voice-btn.recording {
             background: #ff003c !important;
             color: white !important;
@@ -391,7 +397,6 @@
             border-radius: 22px;
             background-color: #f1f3f4;
         }
-        /* ----------------------------------- */
 
         .action-sheet {
             position: fixed;
@@ -862,7 +867,6 @@
                 });
             }
 
-            // --- LOGIKA KRÓTKOFALÓWKI ---
             let mediaRecorder;
             let audioChunks = [];
             let recordStartTime = 0;
@@ -943,6 +947,10 @@
 
             function setupLongPress(element, messageData, isMedia) {
                 let pressTimer = null;
+                
+                // NOWE: Blokowanie natywnego menu kontekstowego systemu
+                element.addEventListener('contextmenu', e => e.preventDefault());
+
                 const start = () => {
                     if (pressTimer !== null) return;
                     pressTimer = setTimeout(() => {
@@ -1005,7 +1013,6 @@
                 selectedMessage = null;
             });
 
-            // --- SYSTEM WZNAWIANIA POŁĄCZENIA PO WYBUDZENIU EKRANU ---
             document.addEventListener('visibilitychange', async () => {
                 if (document.visibilityState === 'visible' && !document.getElementById('chat-screen').classList.contains('hidden')) {
                     
@@ -1027,7 +1034,6 @@
                     }
                 }
             });
-            // ---------------------------------------------------------
 
         })();
 
