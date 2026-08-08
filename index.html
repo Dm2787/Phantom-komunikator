@@ -277,7 +277,6 @@
             text-align: right;
         }
 
-        /* Styl dla zepsutej, nieodszyfrowanej wiadomości */
         .message .corrupted {
             color: #ff003c;
             font-style: italic;
@@ -451,8 +450,8 @@
         <input type="text" id="username-input" placeholder="> USER_ID (Ty)">
         <input type="text" id="recipient-input" placeholder="> TARGET_ID (Odbiorca)">
         
-        <!-- NOWE: Wymagany PIN do Szyfrowania Seryjnego -->
-        <input type="password" id="secret-pin-input" placeholder="> ENCRYPTION_KEY (PIN)">
+        <!-- FIX: Pole typu tekstowego, żeby Google nie sugerowało haseł -->
+        <input type="text" id="secret-pin-input" placeholder="> ENCRYPTION_KEY (PIN)" autocomplete="off" spellcheck="false" style="-webkit-text-security: disc;">
         
         <button id="start-chat-btn">INITIATE_CONNECTION</button>
     </div>
@@ -495,63 +494,6 @@
     <script>
         let addReaction;
         
-        // --- 1. SILNIK KRYPTOGRAFICZNY (Web Crypto API) ---
-        let cryptoKey = null;
-        const SALT = "PHANTOM_TERMINAL_2026_SALT"; // Stała sól dla ułatwienia parowania
-
-        // Funkcja generująca prawdziwy klucz szyfrujący (AES-GCM) na podstawie hasła
-        async function setupCryptoKey(pin) {
-            const enc = new TextEncoder();
-            const keyMaterial = await crypto.subtle.importKey(
-                "raw", enc.encode(pin), { name: "PBKDF2" }, false, ["deriveKey"]
-            );
-            cryptoKey = await crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt: enc.encode(SALT), iterations: 100000, hash: "SHA-256" },
-                keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
-            );
-        }
-
-        // Szyfrowanie danych w locie
-        async function encryptData(text) {
-            if (!cryptoKey) return text; // Zabezpieczenie przed błędem
-            const enc = new TextEncoder();
-            const iv = crypto.getRandomValues(new Uint8Array(12)); // Losowy wektor dla bezpieczeństwa
-            const cipher = await crypto.subtle.encrypt(
-                { name: "AES-GCM", iv: iv },
-                cryptoKey,
-                enc.encode(text)
-            );
-            
-            // Łączenie IV i Ciphertext, a następnie zamiana na Base64
-            const payload = new Uint8Array(iv.length + cipher.byteLength);
-            payload.set(iv, 0);
-            payload.set(new Uint8Array(cipher), iv.length);
-            return btoa(String.fromCharCode(...payload));
-        }
-
-        // Odszyfrowywanie (jeśli błędny klucz - zwraca błąd wizualny)
-        async function decryptData(base64Str) {
-            if (!cryptoKey) return "[KEY_MISSING]";
-            try {
-                const raw = atob(base64Str);
-                const payload = new Uint8Array(new ArrayBuffer(raw.length));
-                for (let i = 0; i < raw.length; i++) payload[i] = raw.charCodeAt(i);
-                
-                const iv = payload.slice(0, 12);
-                const data = payload.slice(12);
-                
-                const decrypted = await crypto.subtle.decrypt(
-                    { name: "AES-GCM", iv: iv },
-                    cryptoKey,
-                    data
-                );
-                return new TextDecoder().decode(decrypted);
-            } catch (e) {
-                return "CORRUPT_DATA"; // Hasło było błędne
-            }
-        }
-        // --- KONIEC SILNIKA KRYPTOGRAFICZNEGO ---
-
         let audioCtx = null;
         function playTerminalBeep(silent = false) {
             try {
@@ -597,7 +539,52 @@
 
             let currentUser = '';
             let chatRecipient = '';
-            let secretPin = '';
+            let cryptoKey = null;
+            const SALT = "PHANTOM_TERMINAL_2026_SALT";
+
+            async function setupCryptoKey(pin) {
+                const enc = new TextEncoder();
+                const keyMaterial = await crypto.subtle.importKey(
+                    "raw", enc.encode(pin), { name: "PBKDF2" }, false, ["deriveKey"]
+                );
+                cryptoKey = await crypto.subtle.deriveKey(
+                    { name: "PBKDF2", salt: enc.encode(SALT), iterations: 100000, hash: "SHA-256" },
+                    keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+                );
+            }
+
+            async function encryptData(text) {
+                if (!cryptoKey) return text;
+                const enc = new TextEncoder();
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const cipher = await crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv: iv },
+                    cryptoKey,
+                    enc.encode(text)
+                );
+                const payload = new Uint8Array(iv.length + cipher.byteLength);
+                payload.set(iv, 0);
+                payload.set(new Uint8Array(cipher), iv.length);
+                return btoa(String.fromCharCode(...payload));
+            }
+
+            async function decryptData(base64Str) {
+                if (!cryptoKey) return "[KEY_MISSING]";
+                try {
+                    const raw = atob(base64Str);
+                    const payload = new Uint8Array(new ArrayBuffer(raw.length));
+                    for (let i = 0; i < raw.length; i++) payload[i] = raw.charCodeAt(i);
+                    const iv = payload.slice(0, 12);
+                    const data = payload.slice(12);
+                    const decrypted = await crypto.subtle.decrypt(
+                        { name: "AES-GCM", iv: iv },
+                        cryptoKey,
+                        data
+                    );
+                    return new TextDecoder().decode(decrypted);
+                } catch (e) { return "CORRUPT_DATA"; }
+            }
+
             let selectedMessage = null;
             let lastDate = null;
             let typingChannel = null;
@@ -632,27 +619,18 @@
 
             startChatBtn.addEventListener('click', async () => {
                 playTerminalBeep(true);
-
                 currentUser = usernameInput.value.trim().toUpperCase();
                 chatRecipient = recipientInput.value.trim().toUpperCase();
-                secretPin = secretPinInput.value.trim();
+                let pin = secretPinInput.value.trim();
 
-                if (!currentUser || !chatRecipient || !secretPin) {
-                    alert('SYS_WARN: ALL FIELDS (INCLUDING PIN) REQUIRED');
+                if (!currentUser || !chatRecipient || !pin) {
+                    alert('SYS_WARN: ALL FIELDS REQUIRED');
                     return;
                 }
-
-                if (!sbClient) {
-                    alert('SYS_ERR: DB_OFFLINE');
-                    return;
-                }
-
-                // Generowanie klucza przed wejściem do bazy!
-                await setupCryptoKey(secretPin);
+                await setupCryptoKey(pin);
 
                 statusIndicator.textContent = '[TARGET: OFFLINE]';
                 statusIndicator.classList.remove('online');
-
                 loginScreen.classList.add('hidden');
                 chatScreen.classList.remove('hidden');
                 chatTitle.textContent = `LINK: ${chatRecipient}`;
@@ -665,7 +643,7 @@
                     typingChannel.untrack();
                     sbClient.removeChannel(typingChannel);
                 }
-                cryptoKey = null; // Usuwanie klucza z pamięci podręcznej RAM dla bezpieczeństwa
+                cryptoKey = null;
                 chatScreen.classList.add('hidden');
                 loginScreen.classList.remove('hidden');
                 messagesList.innerHTML = '';
@@ -680,19 +658,12 @@
                     .or(`and(sender.eq.${currentUser},recipient.eq.${chatRecipient}),and(sender.eq.${chatRecipient},recipient.eq.${currentUser})`)
                     .order('created_at', { ascending: true });
 
-                if (error) {
-                    console.error('FETCH_ERR:', error);
-                    return;
-                }
+                if (error) return;
 
                 messagesList.innerHTML = '';
                 lastDate = null;
-                
-                // Odszyfrowywanie historii musi odbywać się synchronicznie
                 if (data) {
-                    for (const msg of data) {
-                        await appendMessageToDOM(msg, true);
-                    }
+                    for (const msg of data) await appendMessageToDOM(msg, true);
                 }
                 scrollToBottom();
 
@@ -700,20 +671,13 @@
                     .channel('public:messages')
                     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async payload => {
                         const msg = payload.new;
-                        const isRelevant = (msg.sender === currentUser && msg.recipient === chatRecipient) || 
-                                           (msg.sender === chatRecipient && msg.recipient === currentUser);
-                        if (isRelevant) {
+                        if ((msg.sender === currentUser && msg.recipient === chatRecipient) || (msg.sender === chatRecipient && msg.recipient === currentUser)) {
                             await appendMessageToDOM(msg, false);
                             scrollToBottom();
-                            
-                            if (msg.sender !== currentUser) {
-                                playTerminalBeep(false);
-                            }
+                            if (msg.sender !== currentUser) playTerminalBeep(false);
                         }
                     })
-                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
-                        updateMessageInDOM(payload.new);
-                    })
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => updateMessageInDOM(payload.new))
                     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
                         const el = document.querySelector(`[data-id="${payload.old.id}"]`);
                         if (el) el.remove();
@@ -731,27 +695,17 @@
                         let isOnline = false;
                         for (const key in newState) {
                             for (const p of newState[key]) {
-                                if (p.user === chatRecipient) {
-                                    isOnline = true;
-                                    break;
-                                }
+                                if (p.user === chatRecipient) isOnline = true;
                             }
                         }
-                        if (isOnline) {
-                            statusIndicator.textContent = '[TARGET: ONLINE]';
-                            statusIndicator.classList.add('online');
-                        } else {
-                            statusIndicator.textContent = '[TARGET: OFFLINE]';
-                            statusIndicator.classList.remove('online');
-                        }
+                        statusIndicator.textContent = isOnline ? '[TARGET: ONLINE]' : '[TARGET: OFFLINE]';
+                        isOnline ? statusIndicator.classList.add('online') : statusIndicator.classList.remove('online');
                     })
                     .on('broadcast', { event: 'typing' }, payload => {
                         if (payload.payload.user === chatRecipient) {
                             typingIndicator.textContent = `[${chatRecipient} IS_TYPING...]`;
                             clearTimeout(typingTimer);
-                            typingTimer = setTimeout(() => {
-                                typingIndicator.textContent = '';
-                            }, 2000);
+                            typingTimer = setTimeout(() => typingIndicator.textContent = '', 2000);
                         }
                     })
                     .subscribe(async (status) => {
@@ -770,20 +724,14 @@
             });
 
             async function appendMessageToDOM(msg, isInitialLoad = false) {
-                if (document.querySelector(`[data-id="${msg.id}"]`)) {
-                    updateMessageInDOM(msg);
-                    return;
-                }
+                if (document.querySelector(`[data-id="${msg.id}"]`)) return;
 
-                // ODSZYFROWYWANIE DANYCH Z BAZY
                 const decryptedData = await decryptData(msg.content);
-
                 const msgDate = new Date(msg.created_at).toLocaleDateString();
                 if (msgDate !== lastDate) {
                     const dateDiv = document.createElement('div');
                     dateDiv.className = 'date-divider';
-                    const todayStr = new Date().toLocaleDateString();
-                    dateDiv.textContent = (msgDate === todayStr) ? '>> LOG: TODAY' : `>> LOG: ${msgDate}`;
+                    dateDiv.textContent = (msgDate === new Date().toLocaleDateString()) ? '>> LOG: TODAY' : `>> LOG: ${msgDate}`;
                     messagesList.appendChild(dateDiv);
                     lastDate = msgDate;
                 }
@@ -793,24 +741,20 @@
                 div.setAttribute('data-id', msg.id);
 
                 const contentDiv = document.createElement('div');
-                
-                // Jeśli klucz jest zły, blokujemy zawartość
                 if (decryptedData === "CORRUPT_DATA") {
                     contentDiv.className = "corrupted";
                     contentDiv.textContent = "[ENCRYPTED_DATA_UNREADABLE]";
-                } 
-                else if (msg.type === 'image') {
+                } else if (msg.type === 'image') {
                     const img = document.createElement('img');
-                    img.src = decryptedData; // Wstawiamy odszyfrowany URL
+                    img.src = decryptedData;
                     contentDiv.appendChild(img);
                     setupLongPress(div, msg, true);
                 } else {
                     contentDiv.textContent = decryptedData;
                     setupLongPress(div, msg, false);
                 }
-                
                 div.appendChild(contentDiv);
-
+                
                 const reactDiv = document.createElement('div');
                 reactDiv.className = 'msg-reactions';
                 reactDiv.style.display = 'none';
@@ -827,8 +771,7 @@
 
             function updateMessageInDOM(msg) {
                 const div = document.querySelector(`[data-id="${msg.id}"]`);
-                if (!div) return;
-                renderReactions(div, msg.reactions);
+                if (div) renderReactions(div, msg.reactions);
             }
 
             function renderReactions(div, reactions) {
@@ -837,78 +780,33 @@
                     if (reactDiv) reactDiv.style.display = 'none';
                     return;
                 }
-                let summary = Object.values(reactions).join(' ');
-                if (reactDiv) {
-                    reactDiv.textContent = summary;
-                    reactDiv.style.display = 'block';
-                }
+                reactDiv.textContent = Object.values(reactions).join(' ');
+                reactDiv.style.display = 'block';
             }
 
-            function scrollToBottom() {
-                messagesList.scrollTop = messagesList.scrollHeight;
-            }
+            function scrollToBottom() { messagesList.scrollTop = messagesList.scrollHeight; }
 
             async function sendTextMessage() {
                 const text = messageInput.value.trim();
                 if (!text) return;
-                
-                messageInput.value = ''; // Czyścimy od razu żeby UI było szybkie
-                
-                // SZYFROWANIE PRZED WYSYŁKĄ
+                messageInput.value = '';
                 const encryptedText = await encryptData(text);
-
-                const { error } = await sbClient
-                    .from('messages')
-                    .insert([{ 
-                        sender: currentUser, 
-                        recipient: chatRecipient, 
-                        content: encryptedText, // Baza dostaje tylko śmieci
-                        type: 'text',
-                        reactions: {} 
-                    }]);
+                await sbClient.from('messages').insert([{ sender: currentUser, recipient: chatRecipient, content: encryptedText, type: 'text', reactions: {} }]);
             }
 
             sendBtn.addEventListener('click', sendTextMessage);
-            messageInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendTextMessage();
-            });
-
+            messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendTextMessage(); });
             attachBtn.addEventListener('click', () => imageInput.click());
-
             imageInput.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const compressedBlob = await compressImage(file, 1200, 0.8);
                 const fileName = `DATA_${Date.now()}_${Math.random().toString(36).substring(2)}.webp`;
-
-                const { error: uploadError } = await sbClient.storage
-                    .from('chat-images')
-                    .upload(fileName, compressedBlob);
-
-                if (uploadError) {
-                    alert('UPLOAD_ERR: ' + uploadError.message);
-                    return;
-                }
-
-                const { data: publicUrlData } = sbClient.storage
-                    .from('chat-images')
-                    .getPublicUrl(fileName);
-
-                // Szyfrujemy publiczny URL zdjęcia przed wysyłką!
+                const { error: uploadError } = await sbClient.storage.from('chat-images').upload(fileName, compressedBlob);
+                if (uploadError) return;
+                const { data: publicUrlData } = sbClient.storage.from('chat-images').getPublicUrl(fileName);
                 const encryptedUrl = await encryptData(publicUrlData.publicUrl);
-
-                await sbClient
-                    .from('messages')
-                    .insert([{ 
-                        sender: currentUser, 
-                        recipient: chatRecipient,
-                        content: encryptedUrl, 
-                        type: 'image',
-                        reactions: {}
-                    }]);
-
-                imageInput.value = '';
+                await sbClient.from('messages').insert([{ sender: currentUser, recipient: chatRecipient, content: encryptedUrl, type: 'image', reactions: {} }]);
             });
 
             function compressImage(file, maxWidth, quality) {
@@ -920,22 +818,12 @@
                         img.src = event.target.result;
                         img.onload = () => {
                             const canvas = document.createElement('canvas');
-                            let width = img.width;
-                            let height = img.height;
-
-                            if (width > maxWidth) {
-                                height = Math.round((height * maxWidth) / width);
-                                width = maxWidth;
-                            }
-
-                            canvas.width = width;
-                            canvas.height = height;
+                            let width = img.width, height = img.height;
+                            if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
+                            canvas.width = width; canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-
-                            canvas.toBlob((blob) => {
-                                resolve(blob);
-                            }, 'image/webp', quality);
+                            canvas.toBlob((blob) => { resolve(blob); }, 'image/webp', quality);
                         };
                     };
                 });
@@ -943,25 +831,16 @@
 
             function setupLongPress(element, messageData, isImage) {
                 let pressTimer = null;
-
                 const start = () => {
                     if (pressTimer !== null) return;
                     pressTimer = setTimeout(() => {
                         selectedMessage = messageData;
                         if (navigator.vibrate) navigator.vibrate(40);
-                        
                         actionSave.style.display = isImage ? 'block' : 'none';
                         actionSheet.classList.add('visible');
                     }, 500);
                 };
-
-                const cancel = () => {
-                    if (pressTimer !== null) {
-                        clearTimeout(pressTimer);
-                        pressTimer = null;
-                    }
-                };
-
+                const cancel = () => { if (pressTimer !== null) { clearTimeout(pressTimer); pressTimer = null; } };
                 element.addEventListener('touchstart', start, { passive: true });
                 element.addEventListener('touchend', cancel);
                 element.addEventListener('touchmove', cancel);
@@ -973,56 +852,31 @@
             addReaction = async function(emoji) {
                 if (!selectedMessage) return;
                 actionSheet.classList.remove('visible');
-
                 let currentReactions = selectedMessage.reactions || {};
                 currentReactions[currentUser] = emoji;
-
-                await sbClient
-                    .from('messages')
-                    .update({ reactions: currentReactions })
-                    .eq('id', selectedMessage.id);
-
+                await sbClient.from('messages').update({ reactions: currentReactions }).eq('id', selectedMessage.id);
                 selectedMessage = null;
             };
 
-            actionCancel.addEventListener('click', () => {
-                actionSheet.classList.remove('visible');
-                selectedMessage = null;
-            });
-
-            // Odszyfrowywanie do pobrania
+            actionCancel.addEventListener('click', () => { actionSheet.classList.remove('visible'); selectedMessage = null; });
             actionSave.addEventListener('click', async () => {
                 if (!selectedMessage || selectedMessage.type !== 'image') return;
                 actionSheet.classList.remove('visible');
-
                 try {
                     const decryptedUrl = await decryptData(selectedMessage.content);
-                    if(decryptedUrl === "CORRUPT_DATA") throw new Error("Key Invalid");
-                    
                     const response = await fetch(decryptedUrl);
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `ASSET_${Date.now()}.webp`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
+                    a.href = url; a.download = `ASSET_${Date.now()}.webp`;
+                    document.body.appendChild(a); a.click(); a.remove();
                     window.URL.revokeObjectURL(url);
-                } catch (err) {
-                    alert('DOWNLOAD_ERR: KEY_INVALID');
-                }
+                } catch (err) { alert('DOWNLOAD_ERR: KEY_INVALID'); }
             });
-
             actionDelete.addEventListener('click', async () => {
                 if (!selectedMessage) return;
                 actionSheet.classList.remove('visible');
-
-                await sbClient
-                    .from('messages')
-                    .delete()
-                    .eq('id', selectedMessage.id);
-
+                await sbClient.from('messages').delete().eq('id', selectedMessage.id);
                 selectedMessage = null;
             });
         })();
@@ -1040,7 +894,6 @@
                         });
                     });
                 }).catch(err => console.log('SYS_ERR: SW_FAIL', err));
-
                 let refreshing;
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
                     if (refreshing) return;
@@ -1049,12 +902,7 @@
                 });
             });
         }
-
-        function rebootApp() {
-            if (newWorker) {
-                newWorker.postMessage('SKIP_WAITING');
-            }
-        }
+        function rebootApp() { if (newWorker) newWorker.postMessage('SKIP_WAITING'); }
     </script>
 </body>
 </html>
