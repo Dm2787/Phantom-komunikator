@@ -419,9 +419,12 @@
             animation: blink 1s infinite;
         }
 
+        /* POPRAWKA: Wymuszenie sprzętowej akceleracji dla płynnej animacji na telefonach */
         .message.glitch-out {
             animation: destroy-msg 0.5s forwards;
             pointer-events: none;
+            will-change: transform, opacity, filter;
+            transform: translateZ(0); 
         }
 
         @keyframes destroy-msg {
@@ -584,7 +587,6 @@
             }
         }
 
-        // --- CYFROWY DŹWIĘK BŁĘDU (HACKER GLITCH) ---
         function playGlitchSound() {
             try {
                 if (!audioCtx) {
@@ -595,39 +597,46 @@
                     audioCtx.resume();
                 }
                 
-                const now = audioCtx.currentTime;
+                const duration = 0.5;
+                const bufferSize = audioCtx.sampleRate * duration;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1; 
+                }
                 
-                // Używamy fali piłokształtnej - brzmi bardzo cyfrowo i ostro (jak retro konsola)
-                const osc = audioCtx.createOscillator();
-                osc.type = 'sawtooth';
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass'; 
                 
                 const gain = audioCtx.createGain();
+                const now = audioCtx.currentTime;
                 
-                // Szybkie przeskoki głośności (jąkanie się sygnału)
-                gain.gain.setValueAtTime(0.05, now);
-                gain.gain.setValueAtTime(0, now + 0.04);
-                gain.gain.setValueAtTime(0.05, now + 0.08);
-                gain.gain.setValueAtTime(0, now + 0.12);
-                gain.gain.setValueAtTime(0.08, now + 0.15);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.06, now + 0.05); 
+                gain.gain.setValueAtTime(0, now + 0.1);             
+                gain.gain.setValueAtTime(0.08, now + 0.12);         
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.25); 
+                gain.gain.setValueAtTime(0.1, now + 0.3);           
+                gain.gain.exponentialRampToValueAtTime(0.001, now + duration); 
                 
-                // Dziki, nienaturalny skok częstotliwości (cyfrowe zniekształcenie)
-                osc.frequency.setValueAtTime(600, now);          // Zaczyna średnio
-                osc.frequency.setValueAtTime(1500, now + 0.04);  // Skok w górę
-                osc.frequency.setValueAtTime(300, now + 0.08);   // Twardy dół
-                osc.frequency.setValueAtTime(2500, now + 0.15);  // Pisk
-                osc.frequency.exponentialRampToValueAtTime(50, now + 0.35); // Błyskawiczny zjazd w dół
+                filter.frequency.setValueAtTime(600, now);
+                filter.frequency.linearRampToValueAtTime(300, now + 0.15);
+                filter.frequency.setValueAtTime(500, now + 0.2);
+                filter.frequency.linearRampToValueAtTime(200, now + duration);
                 
-                osc.connect(gain);
+                noise.connect(filter);
+                filter.connect(gain);
                 gain.connect(audioCtx.destination);
                 
-                osc.start(now);
-                osc.stop(now + 0.4);
+                noise.start(now);
+                noise.stop(now + duration);
             } catch (e) {
                 console.log("SYS_ERR: Glitch audio fail");
             }
         }
-        // ---------------------------------------------
 
         (function() {
             const SUPABASE_URL = 'https://quxvvoajvhbutrzuinvf.supabase.co';
@@ -795,9 +804,13 @@
                         }
                     })
                     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => updateMessageInDOM(payload.new))
+                    // POPRAWKA: Płynne łapanie komendy DELETE od drugiej osoby, by wymusić lokalny glitch
                     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
                         const el = document.querySelector(`[data-id="${payload.old.id}"]`);
-                        if (el) el.remove();
+                        if (el && !el.classList.contains('glitch-out')) {
+                            el.classList.add('glitch-out');
+                            setTimeout(() => { if (el.parentNode) el.remove(); }, 550);
+                        }
                     })
                     .subscribe();
 
@@ -880,12 +893,13 @@
                                 localStorage.setItem('phantom_graveyard', JSON.stringify(currentGraveyard));
                             }
 
+                            // POPRAWKA: Minimalnie dłuższy margines, by animacja na 100% się wyświetliła
                             setTimeout(async () => {
-                                div.remove();
+                                if (div.parentNode) div.remove();
                                 if (msg.sender !== currentUser) {
                                     await sbClient.from('messages').delete().eq('id', msg.id);
                                 }
-                            }, 500);
+                            }, 550);
                         }
                     }, 1000);
                 }
@@ -1167,6 +1181,19 @@
 
             actionCancel.addEventListener('click', () => { actionSheet.classList.remove('visible'); selectedMessage = null; });
             
+            // POPRAWKA: Ręczne usunięcie też odpala glitcha
+            actionDelete.addEventListener('click', async () => {
+                if (!selectedMessage) return;
+                actionSheet.classList.remove('visible');
+                const el = document.querySelector(`[data-id="${selectedMessage.id}"]`);
+                if (el && !el.classList.contains('glitch-out')) {
+                    playGlitchSound();
+                    el.classList.add('glitch-out');
+                }
+                await sbClient.from('messages').delete().eq('id', selectedMessage.id);
+                selectedMessage = null;
+            });
+
             actionSave.addEventListener('click', async () => {
                 if (!selectedMessage || (selectedMessage.type !== 'image' && selectedMessage.type !== 'voice' && !selectedMessage.type.includes('image_burn') && !selectedMessage.type.includes('voice_burn'))) return;
                 actionSheet.classList.remove('visible');
@@ -1191,13 +1218,6 @@
                 } catch (err) {
                     alert('DOWNLOAD_ERR: KEY_INVALID');
                 }
-            });
-            
-            actionDelete.addEventListener('click', async () => {
-                if (!selectedMessage) return;
-                actionSheet.classList.remove('visible');
-                await sbClient.from('messages').delete().eq('id', selectedMessage.id);
-                selectedMessage = null;
             });
 
             document.addEventListener('visibilitychange', async () => {
