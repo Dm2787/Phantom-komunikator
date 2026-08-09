@@ -51,7 +51,7 @@ self.addEventListener('push', function(event) {
     const options = {
         body: '[!] Zarejestrowano nową transmisję...',
         icon: 'icon-192.png',
-        badge: 'icon-192.png', // Mała, monochromatyczna ikonka górnego paska na Androidzie
+        badge: 'icon-192.png', 
         vibrate: [200, 100, 200]
     };
     
@@ -63,19 +63,22 @@ self.addEventListener('push', function(event) {
 // Akcja po kliknięciu w powiadomienie (przejście do aplikacji)
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
+    
+    // NAPRAWA BŁĘDU 404: Używamy scope, czyli dokładnej ścieżki repozytorium na Githubie
+    const targetUrl = self.registration.scope;
+
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-            // Jeśli karta jest już otwarta w tle, przesuń ją na pierwszy plan
             for (let i = 0; i < clientList.length; i++) {
                 let client = clientList[i];
-                if (client.url === '/' && 'focus' in client) {
+                if (client.url === targetUrl && 'focus' in client) {
                     return client.focus();
                 }
             }
-            // Jeśli nie jest, otwórz aplikację
             if (clients.openWindow) {
-                return clients.openWindow('/');
+                return clients.openWindow(targetUrl);
             }
         })
     );
 });
+      
