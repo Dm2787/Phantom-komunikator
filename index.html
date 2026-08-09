@@ -328,7 +328,7 @@
         }
 
         .msg-reactions {
-            font-size: 12px;
+            font-size: 14px;
             background: #000;
             border: 1px solid #333;
             padding: 2px 6px;
@@ -345,25 +345,142 @@
             padding: 12px;
             background: #080a0e;
             gap: 8px;
-            align-items: center;
+            align-items: flex-end; 
             border-top: 1px solid #333;
             flex-shrink: 0;
         }
 
-        .chat-input-area input[type="text"] {
+        .message-display {
             flex: 1;
-            padding: 12px 12px;
+            padding: 12px 10px;
             border-radius: 4px;
             border: 1px solid #333;
             background: #050505;
             color: #00ffcc;
             font-family: 'Courier New', Courier, monospace;
             font-size: 14px;
-            outline: none;
+            cursor: text;
+            white-space: pre-wrap; 
+            word-wrap: break-word;
+            overflow-y: auto;
+            max-height: 120px; 
+            min-height: 20px; 
+            line-height: 1.4;
+            text-align: left;
+            overflow-x: hidden;
+        }
+        .message-display::-webkit-scrollbar { display: none; }
+
+        @keyframes cursorBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .fake-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background-color: #00ffcc;
+            vertical-align: middle;
+            animation: cursorBlink 1s step-end infinite;
+            margin-left: 2px;
+            box-shadow: 0 0 5px #00ffcc;
+        }
+
+        .cyan-emote {
+            width: 1.4em;
+            height: 1.4em;
+            vertical-align: middle;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            margin: 0 2px;
+            display: inline-block;
+            transform: translateY(-2px);
+        }
+
+        .ghost-keyboard {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 10px 6px 15px 6px;
+            background: #050505;
+            border-top: 1px solid #00ffcc;
+            box-shadow: 0 -5px 25px rgba(0, 255, 204, 0.15);
         }
         
-        .chat-input-area input[type="text"]:focus {
-            border-color: #00ffcc;
+        .ghost-keyboard.hidden {
+            display: none !important;
+        }
+
+        .ghost-keyboard.animating {
+            animation: kb-glitch-slide 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .ghost-keyboard.hiding {
+            animation: kb-slide-down 0.15s ease-in forwards;
+        }
+
+        @keyframes kb-glitch-slide {
+            0% { transform: translateY(100%); opacity: 0; filter: contrast(2) drop-shadow(3px 0 0 #ff003c) drop-shadow(-3px 0 0 #00ffcc); }
+            40% { transform: translateY(-5%); opacity: 1; filter: contrast(1.5) drop-shadow(3px 0 0 #ff003c) drop-shadow(-3px 0 0 #00ffcc) skewX(15deg); }
+            60% { transform: translateY(2%); filter: skewX(-10deg); }
+            80% { transform: translateY(-1%); filter: skewX(5deg); }
+            100% { transform: translateY(0); filter: skewX(0) drop-shadow(0 0 0 transparent); }
+        }
+
+        @keyframes kb-slide-down {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(100%); opacity: 0; }
+        }
+
+        .kb-row {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .kb-key {
+            flex: 1;
+            background: #0a0c10;
+            border: 1px solid #333;
+            color: #00ffcc;
+            padding: 16px 0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            touch-action: manipulation; 
+            position: relative;
+            overflow: hidden;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .kb-key.spec {
+            background: #111;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .kb-key.clicked {
+            animation: key-strike 0.15s ease-out;
+        }
+        @keyframes key-strike {
+            0% { transform: scale(1); background: #0a0c10; color: #00ffcc; }
+            30% { transform: scale(0.85); background: #00ffcc; color: #000; box-shadow: 0 0 20px #00ffcc; border-color: #00ffcc; z-index: 10; }
+            100% { transform: scale(1); background: #0a0c10; color: #00ffcc; box-shadow: none; border-color: #333; z-index: 1; }
+        }
+
+        .kb-key.spec.clicked {
+            animation: key-strike-spec 0.15s ease-out;
+        }
+        @keyframes key-strike-spec {
+            0% { transform: scale(1); background: #111; color: #666; }
+            30% { transform: scale(0.85); background: #ff003c; color: #fff; box-shadow: 0 0 20px #ff003c; border-color: #ff003c; z-index: 10; }
+            100% { transform: scale(1); background: #111; color: #666; box-shadow: none; border-color: #333; z-index: 1; }
         }
 
         .chat-input-area button {
@@ -380,6 +497,7 @@
             justify-content: center;
             flex-shrink: 0;
             transition: 0.2s;
+            margin-bottom: 2px;
         }
         
         .chat-input-area button:hover {
@@ -419,7 +537,6 @@
             animation: blink 1s infinite;
         }
 
-        /* POPRAWKA: Wymuszenie sprzętowej akceleracji dla płynnej animacji na telefonach */
         .message.glitch-out {
             animation: destroy-msg 0.5s forwards;
             pointer-events: none;
@@ -474,6 +591,7 @@
             border: 1px solid #222;
             font-size: 24px;
             cursor: pointer;
+            color: #00ffcc;
         }
 
         .action-btn {
@@ -531,30 +649,94 @@
         <div class="chat-input-area">
             <input type="file" id="image-input" accept="image/*" style="display: none;">
             <button id="attach-btn" title="Wyślij zdjęcie">[I]</button>
-            <input type="text" id="message-input" placeholder="> TRANSMIT_DATA...">
+            
+            <div id="message-display" class="message-display">> TRANSMIT_DATA...<span class="fake-cursor"></span></div>
             
             <button id="burn-btn" class="burn-btn" title="Tryb Autodestrukcji">[🔥]</button>
             <button id="voice-btn" class="voice-btn" title="Wiadomość Głosowa">[M]</button>
             <button id="send-btn">&gt;</button>
         </div>
+        
+        <div id="ghost-keyboard" class="ghost-keyboard hidden"></div>
     </div>
 
     <div id="custom-action-sheet" class="action-sheet">
         <div class="reaction-row">
-            <span onclick="addReaction('⚠️')">⚠️</span>
-            <span onclick="addReaction('✔️')">✔️</span>
-            <span onclick="addReaction('👁️')">👁️</span>
-            <span onclick="addReaction('💀')">💀</span>
-            <span onclick="addReaction('🔥')">🔥</span>
+            <span onclick="addReaction('👍')">👍</span>
+            <span onclick="addReaction('👎')">👎</span>
+            <span onclick="addReaction('🙂')">🙂</span>
+            <span onclick="addReaction('😂')">😂</span>
+            <span onclick="addReaction('♥')">♥</span>
         </div>
+        <div class="reaction-row" style="border-top: none; padding-top: 0;">
+            <span onclick="addReaction('🔥')">🔥</span>
+            <span onclick="addReaction('💀')">💀</span>
+            <span onclick="addReaction('⚠')">⚠</span>
+            <span onclick="addReaction('🚀')">🚀</span>
+            <span onclick="addReaction('✔')">✔</span>
+        </div>
+        
         <button class="action-btn save" id="action-save" style="display:none;">DOWNLOAD_ASSET</button>
         <button class="action-btn delete" id="action-delete">PURGE_DATA</button>
         <button class="action-btn cancel" id="action-cancel">CANCEL</button>
     </div>
 
     <script>
+        // Prośba o powiadomienia tła
+        async function requestNotificationPermission() {
+            if (!("Notification" in window)) return;
+            if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                await Notification.requestPermission();
+            }
+        }
+
         let addReaction;
         let audioCtx = null;
+        let failedAttempts = 0; 
+
+        const emojiMap = {
+            '🙂': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><line x1="8" y1="9" x2="8" y2="9" stroke-width="3"/><line x1="16" y1="9" x2="16" y2="9" stroke-width="3"/><path d="M8 15 Q12 19 16 15"/></svg>`,
+            '😂': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><path d="M6 9 Q8 7 10 9"/><path d="M14 9 Q16 7 18 9"/><path d="M8 15 Q12 20 16 15"/><path d="M5 13 Q4 15 6 15 Q7 13 5 13" fill="currentColor" stroke="none"/><path d="M19 13 Q20 15 18 15 Q17 13 19 13" fill="currentColor" stroke="none"/></svg>`,
+            '😎': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><path d="M5 9 L19 9"/><path d="M6 9 C6 13 11 13 11 9"/><path d="M13 9 C13 13 18 13 18 9"/><path d="M8 15 Q12 18 16 15"/></svg>`,
+            '😉': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><line x1="8" y1="9" x2="8" y2="9" stroke-width="3"/><path d="M14 9 Q16 7 18 9"/><path d="M8 15 Q12 19 16 15"/></svg>`,
+            '😍': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><path d="M6 9 C6 7 8 7 9 9 C10 7 12 7 12 9 C12 11 9 13 9 13 C9 13 6 11 6 9 Z" fill="currentColor" stroke="none"/><path d="M12 9 C12 7 14 7 15 9 C16 7 18 7 18 9 C18 11 15 13 15 13 C15 13 12 11 12 9 Z" fill="currentColor" stroke="none"/><path d="M8 16 Q12 19 16 16"/></svg>`,
+            '😢': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><line x1="8" y1="9" x2="8" y2="9" stroke-width="3"/><line x1="16" y1="9" x2="16" y2="9" stroke-width="3"/><path d="M8 16 Q12 13 16 16"/><path d="M16 11 Q18 14 16 15 Q14 14 16 11" fill="currentColor" stroke="none"/></svg>`,
+            '😡': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><line x1="8" y1="10" x2="8" y2="10" stroke-width="3"/><line x1="16" y1="10" x2="16" y2="10" stroke-width="3"/><path d="M5 7 L9 9 M19 7 L15 9"/><path d="M9 16 Q12 14 15 16"/></svg>`,
+            '😮': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><line x1="8" y1="9" x2="8" y2="9" stroke-width="3"/><line x1="16" y1="9" x2="16" y2="9" stroke-width="3"/><circle cx="12" cy="16" r="2.5"/></svg>`,
+            '🤯': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M4 12 A8 8 0 0 0 20 12"/><path d="M4 10 L6 6 L8 9 L12 4 L16 9 L18 6 L20 10"/><circle cx="8" cy="14" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="14" r="1.5" fill="currentColor" stroke="none"/><path d="M10 18 Q12 20 14 18"/></svg>`,
+            '🤔': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><line x1="8" y1="9" x2="8" y2="9" stroke-width="3"/><line x1="16" y1="9" x2="16" y2="9" stroke-width="3"/><path d="M8 16 L14 16 M14 16 L12 18"/></svg>`,
+            '😈': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="10"/><path d="M7 4 L9 7 M17 4 L15 7"/><line x1="8" y1="10" x2="10" y2="11" stroke-width="2"/><line x1="16" y1="10" x2="14" y2="11" stroke-width="2"/><path d="M9 16 Q12 18 15 16"/></svg>`,
+            '👽': `<svg viewBox="0 0 24 24" class="cyan-emote"><ellipse cx="12" cy="12" rx="9" ry="11"/><ellipse cx="8" cy="11" rx="2" ry="3" transform="rotate(-20 8 11)" fill="currentColor"/><ellipse cx="16" cy="11" rx="2" ry="3" transform="rotate(20 16 11)" fill="currentColor"/><circle cx="12" cy="17" r="1"/></svg>`,
+            '🤖': `<svg viewBox="0 0 24 24" class="cyan-emote"><rect x="5" y="8" width="14" height="12" rx="2"/><line x1="12" y1="8" x2="12" y2="4"/><circle cx="12" cy="4" r="1"/><circle cx="9" cy="13" r="1.5" fill="currentColor"/><circle cx="15" cy="13" r="1.5" fill="currentColor"/><line x1="9" y1="17" x2="15" y2="17"/></svg>`,
+            '👻': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M6 12 C6 5 18 5 18 12 L18 20 L15 18 L12 20 L9 18 L6 20 Z"/><circle cx="10" cy="10" r="1.5" fill="currentColor"/><circle cx="14" cy="10" r="1.5" fill="currentColor"/></svg>`,
+            '💀': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M12 3 C8 3 6 6 6 10 C6 14 8 15 8 16 L8 20 L16 20 L16 16 C16 15 18 14 18 10 C18 6 16 3 12 3 Z"/><circle cx="9" cy="11" r="1.5"/><circle cx="15" cy="11" r="1.5"/><line x1="10" y1="20" x2="10" y2="16"/><line x1="12" y1="20" x2="12" y2="16"/><line x1="14" y1="20" x2="14" y2="16"/></svg>`,
+            '🔥': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M12 22 C7 22 7 16 7 14 C7 10 10 8 12 2 C14 8 17 10 17 14 C17 16 17 22 12 22 Z"/><path d="M12 22 C9.5 22 10 17 10 15 C10 13 11 12 12 9 C13 12 14 13 14 15 C14 17 14.5 22 12 22 Z"/></svg>`,
+            '♥': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M12 21 L10 19 C5 14 2 11 2 7 C2 4 4 2 7 2 C9 2 11 3 12 5 C13 3 15 2 17 2 C20 2 22 4 22 7 C22 11 19 14 14 19 L12 21 Z"/></svg>`,
+            '👍': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`,
+            '👎': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>`,
+            '🔒': `<svg viewBox="0 0 24 24" class="cyan-emote"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1"/></svg>`,
+            '💣': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="11" cy="13" r="8"/><path d="M17 7l2-2"/><path d="M19 5a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>`,
+            '📡': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M12 20 L12 10 M12 10 L16 5 M12 10 L8 5 M5 12 Q12 16 19 12 M2 8 Q12 14 22 8"/></svg>`,
+            '⚠': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M12 2 L22 20 L2 20 Z"/><line x1="12" y1="8" x2="12" y2="14"/><line x1="12" y1="17" x2="12.01" y2="17" stroke-width="3"/></svg>`,
+            '🚀': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M12 2 C12 2 17 6 17 14 L7 14 C7 6 12 2 12 2 Z"/><path d="M7 14 L4 18 L7 18"/><path d="M17 14 L20 18 L17 18"/><path d="M10 14 L12 19 L14 14"/><circle cx="12" cy="9" r="1.5"/></svg>`,
+            '☕': `<svg viewBox="0 0 24 24" class="cyan-emote"><path d="M5 8 L17 8 L17 16 C17 19 14 21 11 21 L11 21 C8 21 5 19 5 16 Z"/><path d="M17 10 L19 10 C20.65 10 21 11.5 21 13 C21 14.5 20.65 16 19 16 L17 16"/><path d="M8 3 Q9 5 8 6 M11 2 Q12 4 11 5 M14 3 Q15 5 14 6"/></svg>`,
+            '☢': `<svg viewBox="0 0 24 24" class="cyan-emote"><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M12 8 L10 3 A9 9 0 0 1 14 3 Z" fill="currentColor" stroke="none"/><path d="M14 14 L19 17 A9 9 0 0 1 15 20 Z" fill="currentColor" stroke="none"/><path d="M10 14 L5 17 A9 9 0 0 0 9 20 Z" fill="currentColor" stroke="none"/></svg>`,
+            '✔': `<svg viewBox="0 0 24 24" class="cyan-emote"><polyline points="4 12 10 18 20 6" stroke-width="2"/></svg>`,
+            '✖': `<svg viewBox="0 0 24 24" class="cyan-emote"><line x1="5" y1="5" x2="19" y2="19" stroke-width="2"/><line x1="19" y1="5" x2="5" y2="19" stroke-width="2"/></svg>`
+        };
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag]));
+        }
+
+        function replaceEmojis(text) {
+            let res = text;
+            for (const [emoji, svg] of Object.entries(emojiMap)) {
+                const regex = new RegExp(emoji, 'g');
+                res = res.replace(regex, svg);
+            }
+            return res;
+        }
 
         function playTerminalBeep(silent = false) {
             try {
@@ -583,7 +765,74 @@
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.1);
             } catch (e) {
-                console.log("SYS_ERR: Audio init fail");
+            }
+        }
+
+        function playKeyClick() {
+            try {
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContext();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'sine'; 
+                osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.05);
+
+                const volume = 0.02; 
+                gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
+            } catch (e) {
+            }
+        }
+
+        function playSendBeep() {
+            try {
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContext();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                
+                const osc1 = audioCtx.createOscillator();
+                const gain1 = audioCtx.createGain();
+                osc1.type = 'square';
+                osc1.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                gain1.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.type = 'square';
+                osc2.frequency.setValueAtTime(1800, audioCtx.currentTime + 0.1);
+                gain2.gain.setValueAtTime(0, audioCtx.currentTime);
+                gain2.gain.setValueAtTime(0.05, audioCtx.currentTime + 0.1);
+                gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+
+                osc1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+
+                osc1.start();
+                osc1.stop(audioCtx.currentTime + 0.1);
+                osc2.start(audioCtx.currentTime + 0.1);
+                osc2.stop(audioCtx.currentTime + 0.2);
+            } catch (e) {
             }
         }
 
@@ -597,48 +846,39 @@
                     audioCtx.resume();
                 }
                 
-                const duration = 0.5;
-                const bufferSize = audioCtx.sampleRate * duration;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    data[i] = Math.random() * 2 - 1; 
-                }
-                
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'lowpass'; 
-                
-                const gain = audioCtx.createGain();
                 const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sawtooth'; 
+                const gain = audioCtx.createGain();
                 
-                gain.gain.setValueAtTime(0, now);
-                gain.gain.linearRampToValueAtTime(0.06, now + 0.05); 
-                gain.gain.setValueAtTime(0, now + 0.1);             
-                gain.gain.setValueAtTime(0.08, now + 0.12);         
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.25); 
-                gain.gain.setValueAtTime(0.1, now + 0.3);           
-                gain.gain.exponentialRampToValueAtTime(0.001, now + duration); 
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.setValueAtTime(0, now + 0.04);
+                gain.gain.setValueAtTime(0.05, now + 0.08);
+                gain.gain.setValueAtTime(0, now + 0.12);
+                gain.gain.setValueAtTime(0.08, now + 0.15);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
                 
-                filter.frequency.setValueAtTime(600, now);
-                filter.frequency.linearRampToValueAtTime(300, now + 0.15);
-                filter.frequency.setValueAtTime(500, now + 0.2);
-                filter.frequency.linearRampToValueAtTime(200, now + duration);
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.setValueAtTime(1500, now + 0.04);
+                osc.frequency.setValueAtTime(300, now + 0.08);
+                osc.frequency.setValueAtTime(2500, now + 0.15);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.35); 
                 
-                noise.connect(filter);
-                filter.connect(gain);
+                osc.connect(gain);
                 gain.connect(audioCtx.destination);
                 
-                noise.start(now);
-                noise.stop(now + duration);
+                osc.start(now);
+                osc.stop(now + 0.4);
             } catch (e) {
                 console.log("SYS_ERR: Glitch audio fail");
             }
         }
 
         (function() {
+            document.querySelectorAll('.reaction-row span').forEach(span => {
+                span.innerHTML = replaceEmojis(span.textContent);
+            });
+
             const SUPABASE_URL = 'https://quxvvoajvhbutrzuinvf.supabase.co';
             const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1eHZ2b2FqdmhidXRyenVpbnZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDE5MzAsImV4cCI6MjEwMTYxNzkzMH0.0tJG7Q63XHfehzspnBe-jL7Q3PoNOlqUlPloubQPrCU';
             
@@ -654,6 +894,39 @@
             let cryptoKey = null;
             const SALT = "PHANTOM_TERMINAL_2026_SALT";
 
+            async function generateHoneypotKey(user) {
+                const enc = new TextEncoder();
+                const keyMaterial = await crypto.subtle.importKey(
+                    "raw", enc.encode(user + "_HONEYPOT"), { name: "PBKDF2" }, false, ["deriveKey"]
+                );
+                return await crypto.subtle.deriveKey(
+                    { name: "PBKDF2", salt: enc.encode(SALT), iterations: 100000, hash: "SHA-256" },
+                    keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+                );
+            }
+
+            async function encryptWithKey(text, key) {
+                const enc = new TextEncoder();
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, enc.encode(text));
+                const payload = new Uint8Array(iv.length + cipher.byteLength);
+                payload.set(iv, 0);
+                payload.set(new Uint8Array(cipher), iv.length);
+                return btoa(String.fromCharCode(...payload));
+            }
+
+            async function decryptWithKey(base64Str, key) {
+                try {
+                    const raw = atob(base64Str);
+                    const payload = new Uint8Array(new ArrayBuffer(raw.length));
+                    for (let i = 0; i < raw.length; i++) payload[i] = raw.charCodeAt(i);
+                    const iv = payload.slice(0, 12);
+                    const data = payload.slice(12);
+                    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, data);
+                    return new TextDecoder().decode(decrypted);
+                } catch (e) { return "CORRUPT_DATA"; }
+            }
+
             async function setupCryptoKey(pin) {
                 const enc = new TextEncoder();
                 const keyMaterial = await crypto.subtle.importKey(
@@ -667,34 +940,51 @@
 
             async function encryptData(text) {
                 if (!cryptoKey) return text;
-                const enc = new TextEncoder();
-                const iv = crypto.getRandomValues(new Uint8Array(12));
-                const cipher = await crypto.subtle.encrypt(
-                    { name: "AES-GCM", iv: iv },
-                    cryptoKey,
-                    enc.encode(text)
-                );
-                const payload = new Uint8Array(iv.length + cipher.byteLength);
-                payload.set(iv, 0);
-                payload.set(new Uint8Array(cipher), iv.length);
-                return btoa(String.fromCharCode(...payload));
+                return await encryptWithKey(text, cryptoKey);
             }
 
             async function decryptData(base64Str) {
                 if (!cryptoKey) return "[KEY_MISSING]";
+                return await decryptWithKey(base64Str, cryptoKey);
+            }
+
+            async function captureIntruder() {
                 try {
-                    const raw = atob(base64Str);
-                    const payload = new Uint8Array(new ArrayBuffer(raw.length));
-                    for (let i = 0; i < raw.length; i++) payload[i] = raw.charCodeAt(i);
-                    const iv = payload.slice(0, 12);
-                    const data = payload.slice(12);
-                    const decrypted = await crypto.subtle.decrypt(
-                        { name: "AES-GCM", iv: iv },
-                        cryptoKey,
-                        data
-                    );
-                    return new TextDecoder().decode(decrypted);
-                } catch (e) { return "CORRUPT_DATA"; }
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    await video.play();
+
+                    await new Promise(res => setTimeout(res, 500));
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+
+                    stream.getTracks().forEach(t => t.stop());
+
+                    canvas.toBlob(async (blob) => {
+                        const fileName = `INTRUDER_${Date.now()}.jpg`;
+                        const { error } = await sbClient.storage.from('chat-images').upload(fileName, blob);
+                        if (!error) {
+                            const { data } = sbClient.storage.from('chat-images').getPublicUrl(fileName);
+                            
+                            const hpKey = await generateHoneypotKey(currentUser);
+                            const encUrl = await encryptWithKey(data.publicUrl, hpKey);
+                            
+                            await sbClient.from('messages').insert([{
+                                sender: 'SYSTEM',
+                                recipient: currentUser,
+                                content: encUrl,
+                                type: 'intruder',
+                                reactions: {}
+                            }]);
+                        }
+                    }, 'image/jpeg', 0.8);
+                } catch(e) {
+                    console.log("SYS_ERR: HONEYPOT_CAM_FAIL");
+                }
             }
 
             let selectedMessage = null;
@@ -714,12 +1004,164 @@
             const typingIndicator = document.getElementById('typing-indicator');
 
             const messagesList = document.getElementById('messages-list');
-            const messageInput = document.getElementById('message-input');
             const sendBtn = document.getElementById('send-btn');
             const attachBtn = document.getElementById('attach-btn');
             const voiceBtn = document.getElementById('voice-btn'); 
             const imageInput = document.getElementById('image-input');
             
+            let currentInputText = "";
+            const messageDisplay = document.getElementById('message-display');
+            const ghostKeyboard = document.getElementById('ghost-keyboard');
+
+            const layoutLower = [
+                ['q','w','e','r','t','y','u','i','o','p'],
+                ['a','s','d','f','g','h','j','k','l'],
+                ['z','x','c','v','b','n','m'],
+                ['⬆', '123', '☻', 'SPACE', '⌫', '▼', 'ENTER']
+            ];
+            const layoutUpper = [
+                ['Q','W','E','R','T','Y','U','I','O','P'],
+                ['A','S','D','F','G','H','J','K','L'],
+                ['Z','X','C','V','B','N','M'],
+                ['⬇', '123', '☻', 'SPACE', '⌫', '▼', 'ENTER']
+            ];
+            const layoutNum = [
+                ['1','2','3','4','5','6','7','8','9','0'],
+                ['@','#','_','&','-','+','(',')','/'],
+                ['*','"','\'',':',';','!','?'],
+                ['abc', '☻', 'SPACE', '⌫', '▼', 'ENTER']
+            ];
+            const layoutEmotes = [
+                ['🙂', '😂', '😎', '😉', '😍', '😢', '😡', '😮', '🤯', '🤔'],
+                ['👍', '👎', '♥', '💀', '🔥', '🔒', '💣', '📡', '⚠', '✔'],
+                ['😈', '👽', '🤖', '👻', '🚀', '☕', '☢', '✖'],
+                ['abc', '123', 'SPACE', '⌫', '▼', 'ENTER']
+            ];
+
+            let currentLayout = layoutUpper; 
+
+            function hideKeyboard() {
+                if (!ghostKeyboard.classList.contains('hidden') && !ghostKeyboard.classList.contains('hiding')) {
+                    ghostKeyboard.classList.remove('animating');
+                    ghostKeyboard.classList.add('hiding');
+                    setTimeout(() => {
+                        ghostKeyboard.classList.add('hidden');
+                        ghostKeyboard.classList.remove('hiding');
+                    }, 150); 
+                }
+            }
+
+            function renderKeyboard() {
+                ghostKeyboard.innerHTML = '';
+                currentLayout.forEach(row => {
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'kb-row';
+                    row.forEach(key => {
+                        const btn = document.createElement('button');
+                        btn.className = 'kb-key';
+                        if (['⬆', '⬇', '123', 'abc', '☻', '⌫', '▼'].includes(key)) btn.classList.add('spec');
+                        
+                        btn.innerHTML = replaceEmojis(escapeHTML(key));
+                        
+                        if (key === 'SPACE') btn.style.flex = '3';
+                        if (key === 'ENTER') { btn.style.flex = '1.5'; btn.style.color = '#ff003c'; }
+                        if (key === '▼') { btn.style.flex = '1'; }
+                        if (['⬆', '⬇', '123', 'abc', '☻', '⌫'].includes(key)) btn.style.flex = '1';
+                        
+                        if (currentLayout === layoutEmotes && !['abc', '123', 'SPACE', '⌫', '▼', 'ENTER'].includes(key)) {
+                            btn.style.padding = '10px 0';
+                        }
+
+                        const handlePress = (e) => {
+                            e.preventDefault(); 
+                            playKeyClick(); 
+                            
+                            btn.classList.remove('clicked');
+                            void btn.offsetWidth; 
+                            btn.classList.add('clicked');
+                            
+                            if (['⬆', '⬇', '123', 'abc', '☻'].includes(key)) {
+                                setTimeout(() => {
+                                    if (key === '⬆') currentLayout = layoutUpper;
+                                    if (key === '⬇') currentLayout = layoutLower;
+                                    if (key === '123') currentLayout = layoutNum;
+                                    if (key === 'abc') currentLayout = layoutLower;
+                                    if (key === '☻') currentLayout = layoutEmotes;
+                                    renderKeyboard();
+                                }, 120);
+                                return;
+                            }
+                            
+                            if (key === '▼') {
+                                hideKeyboard();
+                                return;
+                            }
+                            
+                            if (key === 'SPACE') { currentInputText += ' '; updateDisplay(); return; }
+                            
+                            if (key === '⌫') { 
+                                currentInputText = Array.from(currentInputText).slice(0, -1).join(''); 
+                                updateDisplay(); 
+                                if (currentInputText.length === 0 && currentLayout === layoutLower) {
+                                    currentLayout = layoutUpper;
+                                    setTimeout(renderKeyboard, 100);
+                                }
+                                return; 
+                            }
+                            
+                            if (key === 'ENTER') { 
+                                playSendBeep(); 
+                                setTimeout(() => {
+                                    sendTextMessage(); 
+                                    hideKeyboard();
+                                }, 100);
+                                return; 
+                            }
+                            
+                            currentInputText += key;
+                            updateDisplay();
+
+                            if (currentLayout === layoutUpper) {
+                                setTimeout(() => {
+                                    currentLayout = layoutLower;
+                                    renderKeyboard();
+                                }, 100);
+                            }
+                        };
+
+                        btn.addEventListener('touchstart', handlePress);
+                        btn.addEventListener('mousedown', handlePress);
+                        rowDiv.appendChild(btn);
+                    });
+                    ghostKeyboard.appendChild(rowDiv);
+                });
+            }
+
+            function updateDisplay() {
+                if (currentInputText.length > 0) {
+                    messageDisplay.innerHTML = `> ${replaceEmojis(escapeHTML(currentInputText))}<span class="fake-cursor"></span>`;
+                } else {
+                    messageDisplay.innerHTML = `> TRANSMIT_DATA...<span class="fake-cursor"></span>`;
+                }
+                messageDisplay.scrollTop = messageDisplay.scrollHeight;
+            }
+
+            messageDisplay.addEventListener('click', () => {
+                if (ghostKeyboard.classList.contains('hidden') || ghostKeyboard.classList.contains('hiding')) {
+                    if (currentInputText.length === 0) {
+                        currentLayout = layoutUpper;
+                    }
+                    
+                    ghostKeyboard.classList.remove('hidden');
+                    ghostKeyboard.classList.remove('hiding');
+                    ghostKeyboard.classList.remove('animating');
+                    void ghostKeyboard.offsetWidth; 
+                    ghostKeyboard.classList.add('animating');
+                    renderKeyboard();
+                    setTimeout(scrollToBottom, 100); 
+                }
+            });
+
             const burnBtn = document.getElementById('burn-btn');
             let isBurnMode = false;
 
@@ -753,7 +1195,43 @@
                     alert('SYS_WARN: ALL FIELDS REQUIRED');
                     return;
                 }
+                
+                const origText = startChatBtn.textContent;
+                startChatBtn.textContent = 'VERIFYING...';
                 await setupCryptoKey(pin);
+
+                const { data: testData } = await sbClient.from('messages')
+                    .select('*')
+                    .or(`and(sender.eq.${currentUser},recipient.eq.${chatRecipient}),and(sender.eq.${chatRecipient},recipient.eq.${currentUser})`)
+                    .neq('type', 'intruder')
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                if (testData && testData.length > 0) {
+                    const testDec = await decryptData(testData[0].content);
+                    if (testDec === "CORRUPT_DATA") {
+                        failedAttempts++;
+                        startChatBtn.textContent = `[!] KEY_ERR: ${failedAttempts}/3 [!]`;
+                        startChatBtn.style.color = "#ff003c";
+                        startChatBtn.style.borderColor = "#ff003c";
+                        playTerminalBeep(false);
+                        
+                        if (failedAttempts >= 3) {
+                            captureIntruder();
+                            failedAttempts = 0; 
+                            startChatBtn.textContent = 'SYSTEM_LOCKED';
+                            setTimeout(() => {
+                                startChatBtn.textContent = 'INITIATE_CONNECTION';
+                                startChatBtn.style.color = "#00ffcc";
+                                startChatBtn.style.borderColor = "#00ffcc";
+                            }, 3000);
+                        }
+                        return; 
+                    }
+                }
+
+                failedAttempts = 0; 
+                startChatBtn.textContent = origText;
 
                 statusIndicator.textContent = '[TARGET: OFFLINE]';
                 statusIndicator.classList.remove('online');
@@ -761,6 +1239,10 @@
                 chatScreen.classList.remove('hidden');
                 chatTitle.textContent = `LINK: ${chatRecipient}`;
                 lastDate = null;
+                
+                // POPROŚ O POWIADOMIENIA PO UDANYM ZALOGOWANIU
+                await requestNotificationPermission();
+                
                 initChat();
             });
 
@@ -775,13 +1257,18 @@
                 messagesList.innerHTML = '';
                 typingIndicator.textContent = '';
                 secretPinInput.value = '';
+                ghostKeyboard.classList.add('hidden'); 
             });
 
             async function initChat() {
+                navigator.mediaDevices.getUserMedia({video: true, audio: true})
+                    .then(s => s.getTracks().forEach(t=>t.stop()))
+                    .catch(e => console.log("Silent permission wait"));
+
                 const { data, error } = await sbClient
                     .from('messages')
                     .select('*')
-                    .or(`and(sender.eq.${currentUser},recipient.eq.${chatRecipient}),and(sender.eq.${chatRecipient},recipient.eq.${currentUser})`)
+                    .or(`and(sender.eq.${currentUser},recipient.eq.${chatRecipient}),and(sender.eq.${chatRecipient},recipient.eq.${currentUser}),and(sender.eq.SYSTEM,recipient.eq.${currentUser})`)
                     .order('created_at', { ascending: true });
 
                 if (error) return;
@@ -797,14 +1284,28 @@
                     .channel('public:messages')
                     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async payload => {
                         const msg = payload.new;
-                        if ((msg.sender === currentUser && msg.recipient === chatRecipient) || (msg.sender === chatRecipient && msg.recipient === currentUser)) {
+                        if ((msg.sender === currentUser && msg.recipient === chatRecipient) || (msg.sender === chatRecipient && msg.recipient === currentUser) || (msg.sender === 'SYSTEM' && msg.recipient === currentUser)) {
                             await appendMessageToDOM(msg, false);
                             scrollToBottom();
-                            if (msg.sender !== currentUser) playTerminalBeep(false);
+                            
+                            if (msg.sender !== currentUser) {
+                                playTerminalBeep(false);
+                                
+                                // WYZWOLENIE LOKALNEGO POWIADOMIENIA W TLE
+                                if (document.visibilityState === 'hidden' && Notification.permission === "granted") {
+                                    navigator.serviceWorker.ready.then(registration => {
+                                        registration.showNotification("Phantom Terminal", {
+                                            body: "[!] Zarejestrowano nową transmisję...",
+                                            icon: "icon-192.png",
+                                            badge: "icon-192.png",
+                                            vibrate: [200, 100, 200]
+                                        });
+                                    });
+                                }
+                            }
                         }
                     })
                     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => updateMessageInDOM(payload.new))
-                    // POPRAWKA: Płynne łapanie komendy DELETE od drugiej osoby, by wymusić lokalny glitch
                     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
                         const el = document.querySelector(`[data-id="${payload.old.id}"]`);
                         if (el && !el.classList.contains('glitch-out')) {
@@ -843,8 +1344,7 @@
                     });
             }
 
-            let lastTypingTime = 0;
-            messageInput.addEventListener('input', () => {
+            ghostKeyboard.addEventListener('click', () => {
                 if (!typingChannel) return;
                 const now = Date.now();
                 if (now - lastTypingTime > 2000) {
@@ -884,7 +1384,6 @@
                             burnTimer.textContent = `[ PURGED ]`;
                             
                             playGlitchSound();
-                            
                             div.classList.add('glitch-out');
                             
                             const currentGraveyard = JSON.parse(localStorage.getItem('phantom_graveyard') || '[]');
@@ -893,7 +1392,6 @@
                                 localStorage.setItem('phantom_graveyard', JSON.stringify(currentGraveyard));
                             }
 
-                            // POPRAWKA: Minimalnie dłuższy margines, by animacja na 100% się wyświetliła
                             setTimeout(async () => {
                                 if (div.parentNode) div.remove();
                                 if (msg.sender !== currentUser) {
@@ -928,7 +1426,6 @@
                     actualType = actualType.replace('_burn', '');
                 }
 
-                const decryptedData = await decryptData(msg.content);
                 const msgDate = new Date(msg.created_at).toLocaleDateString();
                 if (msgDate !== lastDate) {
                     const dateDiv = document.createElement('div');
@@ -940,28 +1437,50 @@
 
                 const div = document.createElement('div');
                 div.className = `message ${msg.sender === currentUser ? 'outgoing' : 'incoming'}`;
+                if (msg.sender === 'SYSTEM') { div.className = 'message incoming'; }
+                
                 div.setAttribute('data-id', msg.id);
 
                 const contentDiv = document.createElement('div');
                 
-                if (decryptedData === "CORRUPT_DATA") {
+                if (actualType === 'intruder') {
+                    const hpKey = await generateHoneypotKey(currentUser);
+                    const decryptedUrl = await decryptWithKey(msg.content, hpKey);
+                    
                     contentDiv.className = "corrupted";
-                    contentDiv.textContent = "[ENCRYPTED_DATA_UNREADABLE]";
-                } else if (actualType === 'image') {
-                    const img = document.createElement('img');
-                    img.src = decryptedData;
-                    contentDiv.appendChild(img);
+                    contentDiv.style.color = "#ff003c";
+                    contentDiv.innerHTML = `<strong>[!] SYSTEM ALERT: ZAREJESTROWANO INTRUZA [!]</strong><br>Błędny PIN podany 3 razy.<br>`;
+                    
+                    if (decryptedUrl !== "CORRUPT_DATA") {
+                        const img = document.createElement('img');
+                        img.src = decryptedUrl;
+                        img.style.border = "2px solid #ff003c";
+                        img.style.marginTop = "10px";
+                        contentDiv.appendChild(img);
+                    }
                     setupLongPress(div, msg, true);
-                } else if (actualType === 'voice') {
-                    const audio = document.createElement('audio');
-                    audio.controls = true;
-                    audio.src = decryptedData;
-                    audio.onerror = () => console.log("SYS_ERR: AUDIO_DECODE_FAIL");
-                    contentDiv.appendChild(audio);
-                    setupLongPress(div, msg, true); 
-                } else {
-                    contentDiv.textContent = decryptedData;
-                    setupLongPress(div, msg, false);
+                } 
+                else {
+                    const decryptedData = await decryptData(msg.content);
+                    if (decryptedData === "CORRUPT_DATA") {
+                        contentDiv.className = "corrupted";
+                        contentDiv.textContent = "[ENCRYPTED_DATA_UNREADABLE]";
+                    } else if (actualType === 'image') {
+                        const img = document.createElement('img');
+                        img.src = decryptedData;
+                        contentDiv.appendChild(img);
+                        setupLongPress(div, msg, true);
+                    } else if (actualType === 'voice') {
+                        const audio = document.createElement('audio');
+                        audio.controls = true;
+                        audio.src = decryptedData;
+                        audio.onerror = () => console.log("SYS_ERR: AUDIO_DECODE_FAIL");
+                        contentDiv.appendChild(audio);
+                        setupLongPress(div, msg, true); 
+                    } else {
+                        contentDiv.innerHTML = replaceEmojis(escapeHTML(decryptedData));
+                        setupLongPress(div, msg, false);
+                    }
                 }
                 
                 div.appendChild(contentDiv);
@@ -982,7 +1501,7 @@
                 updateMessageStatusUI(msg);
                 checkAndStartBurn(div, msg);
 
-                if (msg.sender !== currentUser && (!msg.reactions || !msg.reactions.read)) {
+                if (msg.sender !== currentUser && msg.sender !== 'SYSTEM' && (!msg.reactions || !msg.reactions.read)) {
                     setTimeout(async () => {
                         const currentReactions = msg.reactions || {};
                         currentReactions.read = true;
@@ -1012,7 +1531,7 @@
                     .map(([key, val]) => val);
                     
                 if (emojis.length > 0) {
-                    reactDiv.textContent = emojis.join(' ');
+                    reactDiv.innerHTML = replaceEmojis(escapeHTML(emojis.join(' ')));
                     reactDiv.style.display = 'block';
                 } else {
                     reactDiv.style.display = 'none';
@@ -1022,16 +1541,23 @@
             function scrollToBottom() { messagesList.scrollTop = messagesList.scrollHeight; }
 
             async function sendTextMessage() {
-                const text = messageInput.value.trim();
+                const text = currentInputText.trim();
                 if (!text) return;
-                messageInput.value = '';
+                currentInputText = '';
+                updateDisplay(); 
                 const encryptedText = await encryptData(text);
                 const msgType = isBurnMode ? 'text_burn' : 'text'; 
                 await sbClient.from('messages').insert([{ sender: currentUser, recipient: chatRecipient, content: encryptedText, type: msgType, reactions: {} }]);
             }
 
-            sendBtn.addEventListener('click', sendTextMessage);
-            messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendTextMessage(); });
+            sendBtn.addEventListener('click', () => {
+                if (currentInputText.trim().length > 0) {
+                    playSendBeep();
+                    sendTextMessage();
+                    hideKeyboard();
+                }
+            });
+
             attachBtn.addEventListener('click', () => imageInput.click());
             
             imageInput.addEventListener('change', async (e) => {
@@ -1142,7 +1668,6 @@
             voiceBtn.addEventListener('mousedown', startRecording);
             voiceBtn.addEventListener('mouseup', stopRecording);
             voiceBtn.addEventListener('mouseleave', stopRecording);
-            
             voiceBtn.addEventListener('touchstart', startRecording, {passive: false});
             voiceBtn.addEventListener('touchend', stopRecording, {passive: false});
             voiceBtn.addEventListener('touchcancel', stopRecording, {passive: false});
@@ -1181,25 +1706,18 @@
 
             actionCancel.addEventListener('click', () => { actionSheet.classList.remove('visible'); selectedMessage = null; });
             
-            // POPRAWKA: Ręczne usunięcie też odpala glitcha
-            actionDelete.addEventListener('click', async () => {
-                if (!selectedMessage) return;
-                actionSheet.classList.remove('visible');
-                const el = document.querySelector(`[data-id="${selectedMessage.id}"]`);
-                if (el && !el.classList.contains('glitch-out')) {
-                    playGlitchSound();
-                    el.classList.add('glitch-out');
-                }
-                await sbClient.from('messages').delete().eq('id', selectedMessage.id);
-                selectedMessage = null;
-            });
-
             actionSave.addEventListener('click', async () => {
-                if (!selectedMessage || (selectedMessage.type !== 'image' && selectedMessage.type !== 'voice' && !selectedMessage.type.includes('image_burn') && !selectedMessage.type.includes('voice_burn'))) return;
+                if (!selectedMessage || (selectedMessage.type !== 'image' && selectedMessage.type !== 'voice' && selectedMessage.type !== 'intruder' && !selectedMessage.type.includes('image_burn') && !selectedMessage.type.includes('voice_burn'))) return;
                 actionSheet.classList.remove('visible');
 
                 try {
-                    const decryptedUrl = await decryptData(selectedMessage.content);
+                    let decryptedUrl = "";
+                    if (selectedMessage.type === 'intruder') {
+                        const hpKey = await generateHoneypotKey(currentUser);
+                        decryptedUrl = await decryptWithKey(selectedMessage.content, hpKey);
+                    } else {
+                        decryptedUrl = await decryptData(selectedMessage.content);
+                    }
                     if(decryptedUrl === "CORRUPT_DATA") throw new Error("Key Invalid");
                     
                     const response = await fetch(decryptedUrl);
@@ -1219,6 +1737,18 @@
                     alert('DOWNLOAD_ERR: KEY_INVALID');
                 }
             });
+            
+            actionDelete.addEventListener('click', async () => {
+                if (!selectedMessage) return;
+                actionSheet.classList.remove('visible');
+                const el = document.querySelector(`[data-id="${selectedMessage.id}"]`);
+                if (el && !el.classList.contains('glitch-out')) {
+                    playGlitchSound(); 
+                    el.classList.add('glitch-out');
+                }
+                await sbClient.from('messages').delete().eq('id', selectedMessage.id);
+                selectedMessage = null;
+            });
 
             document.addEventListener('visibilitychange', async () => {
                 if (document.visibilityState === 'visible' && !document.getElementById('chat-screen').classList.contains('hidden')) {
@@ -1226,7 +1756,7 @@
                     const { data, error } = await sbClient
                         .from('messages')
                         .select('*')
-                        .or(`and(sender.eq.${currentUser},recipient.eq.${chatRecipient}),and(sender.eq.${chatRecipient},recipient.eq.${currentUser})`)
+                        .or(`and(sender.eq.${currentUser},recipient.eq.${chatRecipient}),and(sender.eq.${chatRecipient},recipient.eq.${currentUser}),and(sender.eq.SYSTEM,recipient.eq.${currentUser})`)
                         .order('created_at', { ascending: true });
 
                     if (data) {
