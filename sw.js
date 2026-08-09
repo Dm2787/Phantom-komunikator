@@ -45,3 +45,37 @@ self.addEventListener('fetch', (e) => {
     })
   );
 });
+
+// Obsługa powiadomień Web Push w tle
+self.addEventListener('push', function(event) {
+    const options = {
+        body: '[!] Zarejestrowano nową transmisję...',
+        icon: 'icon-192.png',
+        badge: 'icon-192.png', // Mała, monochromatyczna ikonka górnego paska na Androidzie
+        vibrate: [200, 100, 200]
+    };
+    
+    event.waitUntil(
+        self.registration.showNotification('Phantom Terminal', options)
+    );
+});
+
+// Akcja po kliknięciu w powiadomienie (przejście do aplikacji)
+self.addEventListener('notificationclick', function(event) {
+    event.notification.close();
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+            // Jeśli karta jest już otwarta w tle, przesuń ją na pierwszy plan
+            for (let i = 0; i < clientList.length; i++) {
+                let client = clientList[i];
+                if (client.url === '/' && 'focus' in client) {
+                    return client.focus();
+                }
+            }
+            // Jeśli nie jest, otwórz aplikację
+            if (clients.openWindow) {
+                return clients.openWindow('/');
+            }
+        })
+    );
+});
