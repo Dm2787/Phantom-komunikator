@@ -682,7 +682,6 @@
     </div>
 
     <script>
-        // Prośba o powiadomienia tła
         async function requestNotificationPermission() {
             if (!("Notification" in window)) return;
             if (Notification.permission !== "granted" && Notification.permission !== "denied") {
@@ -892,6 +891,8 @@
             let currentUser = '';
             let chatRecipient = '';
             let cryptoKey = null;
+            let lastTypingTime = 0; // Dodana globalna zmienna na potrzeby funkcji triggerTyping
+
             const SALT = "PHANTOM_TERMINAL_2026_SALT";
 
             async function generateHoneypotKey(user) {
@@ -1040,6 +1041,16 @@
 
             let currentLayout = layoutUpper; 
 
+            // NAPRAWA PISZE... W KLAWIATURZE WIDMO
+            function triggerTyping() {
+                if (!typingChannel) return;
+                const now = Date.now();
+                if (now - lastTypingTime > 2000) {
+                    typingChannel.send({ type: 'broadcast', event: 'typing', payload: { user: currentUser } }).catch(() => {});
+                    lastTypingTime = now;
+                }
+            }
+
             function hideKeyboard() {
                 if (!ghostKeyboard.classList.contains('hidden') && !ghostKeyboard.classList.contains('hiding')) {
                     ghostKeyboard.classList.remove('animating');
@@ -1075,6 +1086,8 @@
                         const handlePress = (e) => {
                             e.preventDefault(); 
                             playKeyClick(); 
+                            
+                            triggerTyping(); // <-- TUTAJ WYSYŁAMY SYGNAŁ "PISZE"
                             
                             btn.classList.remove('clicked');
                             void btn.offsetWidth; 
@@ -1158,6 +1171,9 @@
                     void ghostKeyboard.offsetWidth; 
                     ghostKeyboard.classList.add('animating');
                     renderKeyboard();
+                    
+                    if (currentInputText.length === 0) updateDisplay();
+                    
                     setTimeout(scrollToBottom, 100); 
                 }
             });
@@ -1240,7 +1256,6 @@
                 chatTitle.textContent = `LINK: ${chatRecipient}`;
                 lastDate = null;
                 
-                // POPROŚ O POWIADOMIENIA PO UDANYM ZALOGOWANIU
                 await requestNotificationPermission();
                 
                 initChat();
@@ -1291,7 +1306,6 @@
                             if (msg.sender !== currentUser) {
                                 playTerminalBeep(false);
                                 
-                                // WYZWOLENIE LOKALNEGO POWIADOMIENIA W TLE
                                 if (document.visibilityState === 'hidden' && Notification.permission === "granted") {
                                     navigator.serviceWorker.ready.then(registration => {
                                         registration.showNotification("Phantom Terminal", {
@@ -1343,15 +1357,6 @@
                         if (status === 'SUBSCRIBED') await typingChannel.track({ user: currentUser });
                     });
             }
-
-            ghostKeyboard.addEventListener('click', () => {
-                if (!typingChannel) return;
-                const now = Date.now();
-                if (now - lastTypingTime > 2000) {
-                    typingChannel.send({ type: 'broadcast', event: 'typing', payload: { user: currentUser } }).catch(() => {});
-                    lastTypingTime = now;
-                }
-            });
 
             function checkAndStartBurn(div, msg) {
                 let actualType = msg.type;
