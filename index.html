@@ -969,6 +969,7 @@
             
             <div id="ghost-keyboard" class="ghost-keyboard hidden"></div>
             
+            <!-- EKRAN RADARU / MAPY -->
             <div id="radar-screen" class="hidden">
                 <header class="chat-header" style="border-bottom: 1px solid #00ffcc;">
                     <button class="back-btn" id="close-radar-btn">&lt; CLOSE</button>
@@ -977,8 +978,11 @@
                 </header>
                 
                 <div id="map-container" class="radar-dark-mode">
+                    <!-- Siatka Taktyczna -->
                     <div class="tactical-grid"></div>
+                    <!-- Celownik -->
                     <div class="radar-crosshair"><div class="radar-crosshair-center"></div></div>
+                    <!-- Licznik Skordynatów -->
                     <div id="crosshair-coords">
                         TGT_LAT: <span id="crosshair-lat">--.------</span><br>
                         TGT_LNG: <span id="crosshair-lng">--.------</span>
@@ -1334,6 +1338,10 @@
             let targetTrailLine = null;
             const MAX_TRAIL_LENGTH = 20;
 
+            // Zmienne do twardego pulsatora lokalizacji
+            let myLastPos = null;
+            let radarBroadcastInterval = null;
+
             const mapLayers = {
                 dark: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }),
                 street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }),
@@ -1550,12 +1558,25 @@
             document.getElementById('layer-btn-street').addEventListener('click', () => setMapLayer('street'));
             document.getElementById('layer-btn-sat').addEventListener('click', () => setMapLayer('sat'));
 
+            // TWARDY PULSATOR LOKALIZACJI W TLE
+            function broadcastMyLocation() {
+                if (typingChannel && myLastPos && !radarScreen.classList.contains('hidden')) {
+                    typingChannel.send({ 
+                        type: 'broadcast', 
+                        event: 'location', 
+                        payload: { user: currentUser, lat: myLastPos.lat, lng: myLastPos.lng, accuracy: myLastPos.accuracy } 
+                    }).catch(()=>{});
+                }
+            }
+
             function startGeoTracking() {
                 if (navigator.geolocation) {
+                    // UWAGA: Złagodzone filtry, by telefon w budynku nie rzucał błędami
                     geoWatchId = navigator.geolocation.watchPosition(pos => {
                         const lat = pos.coords.latitude;
                         const lng = pos.coords.longitude;
                         const accuracy = pos.coords.accuracy; 
+                        myLastPos = { lat, lng, accuracy };
                         
                         radarStatusText.innerHTML = `[!] SATELLITE UPLINK ACTIVE... ACCURACY: ${Math.round(accuracy)}M`;
                         if(accuracy > 50) {
@@ -1588,14 +1609,16 @@
                             myAccuracyCircle.setRadius(accuracy);
                         }
                         
-                        if (typingChannel) {
-                            typingChannel.send({ type: 'broadcast', event: 'location', payload: { user: currentUser, lat, lng, accuracy } }).catch(()=>{});
-                        }
+                        broadcastMyLocation(); // Natychmiastowa wysyłka przy zmianie
+
                     }, err => {
                         console.error("GEO_ERR", err);
                         radarStatusText.innerHTML = `[ERR] SATELLITE LOCK FAILED`;
                         radarStatusText.style.color = "#ff003c";
-                    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
+                    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+                    
+                    // Niezależnie od ruchu, strzelaj pozycją co 3 sekundy
+                    radarBroadcastInterval = setInterval(broadcastMyLocation, 3000);
                 }
             }
 
@@ -1604,6 +1627,11 @@
                     navigator.geolocation.clearWatch(geoWatchId);
                     geoWatchId = null;
                 }
+                if (radarBroadcastInterval) {
+                    clearInterval(radarBroadcastInterval);
+                    radarBroadcastInterval = null;
+                }
+                myLastPos = null;
             }
 
             radarBtn.addEventListener('click', () => {
@@ -1693,7 +1721,7 @@
                                 currentInputText = Array.from(currentInputText).slice(0, -1).join(''); 
                                 updateDisplay(); 
                                 
-                                // TWARDY SYGNAŁ STOP PRZY SKASOWANIU TEKSTU
+                                // TWARDE ZATRZYMANIE PISANIA
                                 if (currentInputText.length === 0 && typingChannel) {
                                     typingChannel.send({ type: 'broadcast', event: 'stop_typing', payload: { user: currentUser } }).catch(()=>{});
                                 }
@@ -1922,7 +1950,7 @@
                     config: { broadcast: { ack: false }, presence: { key: currentUser } }
                 });
                 
-                let typingTimer; // Zmienna lokalna dla nasłuchiwacza
+                let typingTimer;
                 
                 typingChannel
                     .on('presence', { event: 'sync' }, () => {
@@ -1943,7 +1971,6 @@
                             typingTimer = setTimeout(() => typingIndicator.textContent = '', 3000);
                         }
                     })
-                    // TWARDE WYMUSZENIE ZATRZYMANIA PISANIA
                     .on('broadcast', { event: 'stop_typing' }, payload => {
                         if (payload.payload.user === chatRecipient) {
                             typingIndicator.textContent = '';
@@ -2176,7 +2203,6 @@
                 const text = currentInputText.trim();
                 if (!text) return;
                 
-                // TWARDY SYGNAŁ STOP PRZED WYSŁANIEM
                 if (typingChannel) {
                     typingChannel.send({ type: 'broadcast', event: 'stop_typing', payload: { user: currentUser } }).catch(()=>{});
                 }
@@ -2388,7 +2414,6 @@
                 selectedMessage = null;
             });
 
-            // TWARDY RESTART ŁĄCZA PO WYBUDZENIU TELEFONU
             document.addEventListener('visibilitychange', async () => {
                 if (document.visibilityState === 'visible' && !document.getElementById('chat-screen').classList.contains('hidden')) {
                     
@@ -2409,7 +2434,6 @@
                         await typingChannel.track({ user: currentUser });
                     }
                 } else if (document.visibilityState === 'hidden') {
-                    // WYŚLIJ SYGNAŁ "STOP_TYPING" GDY CHOWASZ APLIKACJĘ DO TŁA
                     if (typingChannel) {
                         typingChannel.send({ type: 'broadcast', event: 'stop_typing', payload: { user: currentUser } }).catch(()=>{});
                     }
