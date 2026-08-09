@@ -249,7 +249,6 @@
             border-color: #00ffcc;
         }
 
-        /* Wskaźnik siły hasła i opakowanie PIN-u */
         .pin-wrapper {
             width: 100%;
             display: flex;
@@ -970,7 +969,6 @@
             
             <div id="ghost-keyboard" class="ghost-keyboard hidden"></div>
             
-            <!-- EKRAN RADARU / MAPY -->
             <div id="radar-screen" class="hidden">
                 <header class="chat-header" style="border-bottom: 1px solid #00ffcc;">
                     <button class="back-btn" id="close-radar-btn">&lt; CLOSE</button>
@@ -979,11 +977,8 @@
                 </header>
                 
                 <div id="map-container" class="radar-dark-mode">
-                    <!-- Siatka Taktyczna -->
                     <div class="tactical-grid"></div>
-                    <!-- Celownik -->
                     <div class="radar-crosshair"><div class="radar-crosshair-center"></div></div>
-                    <!-- Licznik Skordynatów -->
                     <div id="crosshair-coords">
                         TGT_LAT: <span id="crosshair-lat">--.------</span><br>
                         TGT_LNG: <span id="crosshair-lng">--.------</span>
@@ -1354,7 +1349,7 @@
                     "raw", enc.encode(user + "_HONEYPOT"), { name: "PBKDF2" }, false, ["deriveKey"]
                 );
                 return await crypto.subtle.deriveKey(
-                    { name: "PBKDF2", salt: enc.encode(SALT), iterations: 100000, hash: "SHA-256" },
+                    { name: "PBKDF2", salt: enc.encode(SALT), iterations: 500000, hash: "SHA-256" },
                     keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
                 );
             }
@@ -1697,6 +1692,12 @@
                             if (key === '⌫') { 
                                 currentInputText = Array.from(currentInputText).slice(0, -1).join(''); 
                                 updateDisplay(); 
+                                
+                                // TWARDY SYGNAŁ STOP PRZY SKASOWANIU TEKSTU
+                                if (currentInputText.length === 0 && typingChannel) {
+                                    typingChannel.send({ type: 'broadcast', event: 'stop_typing', payload: { user: currentUser } }).catch(()=>{});
+                                }
+                                
                                 if (currentInputText.length === 0 && currentLayout === layoutLower) {
                                     currentLayout = layoutUpper;
                                     setTimeout(renderKeyboard, 100);
@@ -1921,6 +1922,8 @@
                     config: { broadcast: { ack: false }, presence: { key: currentUser } }
                 });
                 
+                let typingTimer; // Zmienna lokalna dla nasłuchiwacza
+                
                 typingChannel
                     .on('presence', { event: 'sync' }, () => {
                         const newState = typingChannel.presenceState();
@@ -1937,7 +1940,14 @@
                         if (payload.payload.user === chatRecipient) {
                             typingIndicator.textContent = `[${chatRecipient} IS_TYPING...]`;
                             clearTimeout(typingTimer);
-                            typingTimer = setTimeout(() => typingIndicator.textContent = '', 2000);
+                            typingTimer = setTimeout(() => typingIndicator.textContent = '', 3000);
+                        }
+                    })
+                    // TWARDE WYMUSZENIE ZATRZYMANIA PISANIA
+                    .on('broadcast', { event: 'stop_typing' }, payload => {
+                        if (payload.payload.user === chatRecipient) {
+                            typingIndicator.textContent = '';
+                            clearTimeout(typingTimer);
                         }
                     })
                     .on('broadcast', { event: 'location' }, payload => {
@@ -2165,6 +2175,12 @@
             async function sendTextMessage() {
                 const text = currentInputText.trim();
                 if (!text) return;
+                
+                // TWARDY SYGNAŁ STOP PRZED WYSŁANIEM
+                if (typingChannel) {
+                    typingChannel.send({ type: 'broadcast', event: 'stop_typing', payload: { user: currentUser } }).catch(()=>{});
+                }
+                
                 currentInputText = '';
                 updateDisplay(); 
                 const encryptedText = await encryptData(text);
@@ -2372,6 +2388,7 @@
                 selectedMessage = null;
             });
 
+            // TWARDY RESTART ŁĄCZA PO WYBUDZENIU TELEFONU
             document.addEventListener('visibilitychange', async () => {
                 if (document.visibilityState === 'visible' && !document.getElementById('chat-screen').classList.contains('hidden')) {
                     
@@ -2390,6 +2407,11 @@
                     
                     if (typingChannel) {
                         await typingChannel.track({ user: currentUser });
+                    }
+                } else if (document.visibilityState === 'hidden') {
+                    // WYŚLIJ SYGNAŁ "STOP_TYPING" GDY CHOWASZ APLIKACJĘ DO TŁA
+                    if (typingChannel) {
+                        typingChannel.send({ type: 'broadcast', event: 'stop_typing', payload: { user: currentUser } }).catch(()=>{});
                     }
                 }
             });
