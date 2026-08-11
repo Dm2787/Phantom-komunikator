@@ -29,7 +29,6 @@
         .digital-font { font-family: 'Share Tech Mono', monospace; font-size: 18px; letter-spacing: 1px; text-shadow: 0 0 5px rgba(0, 255, 204, 0.5); }
         .status-right { display: flex; align-items: center; gap: 12px; }
         
-        /* LAMPKA PURGE LED */
         .led-indicator { width: 8px; height: 8px; border-radius: 50%; background: #111; border: 1px solid #333; transition: 0.1s; margin-right: 2px; box-shadow: inset 0 0 2px #000; }
         .led-indicator.flash { background: #ff003c; border-color: #ff003c; box-shadow: 0 0 10px #ff003c; }
 
@@ -65,9 +64,14 @@
         .messages-list::-webkit-scrollbar-track { background: #000; }
         .messages-list::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
         .date-divider { text-align: center; font-size: 11px; color: #444; margin: 15px 0; font-weight: bold; text-transform: uppercase; }
+        
         .message { max-width: 80%; padding: 10px 14px; word-break: break-word; position: relative; font-size: 14px; display: flex; flex-direction: column; gap: 4px; border-left: 2px solid transparent; border-right: 2px solid transparent; }
         .message.incoming { background: rgba(10, 20, 30, 0.7); align-self: flex-start; border-left-color: #00ffcc; color: #00ffcc; }
         .message.outgoing { background: rgba(30, 10, 15, 0.7); align-self: flex-end; border-right-color: #ff003c; color: #ff003c; text-align: right; }
+        
+        .message a { color: #ffaa00; text-decoration: none; border-bottom: 1px dashed #ffaa00; transition: 0.2s; }
+        .message a:hover { color: #ff003c; border-color: #ff003c; }
+
         .message .corrupted { color: #ff003c; font-style: italic; text-shadow: 2px 0 2px rgba(255,0,0,0.5), -2px 0 2px rgba(0,255,255,0.5); animation: glitch-text 0.5s infinite; }
         @keyframes glitch-text { 0% { opacity: 1; } 50% { opacity: 0.8; transform: skewX(-5deg); } 100% { opacity: 1; transform: skewX(0); } }
         .message img { max-width: 100%; border: 1px solid #333; display: block; cursor: pointer; filter: grayscale(80%) contrast(120%); transition: 0.3s; }
@@ -163,9 +167,7 @@
                 <span id="fake-time" class="digital-font">00:00:00</span>
             </div>
             <div class="status-right">
-                <!-- LAMPKA WIPE LED -->
                 <div id="purge-led" class="led-indicator" title="WIPE_LED"></div>
-                
                 <span class="signal-icons" id="fake-signal"></span>
                 <span id="fake-charging-icon" class="batt-charging" style="display:none;">⚡</span>
                 <span id="fake-batt-text" class="digital-font">100%</span>
@@ -245,16 +247,16 @@
         </div>
     </div>
 
-    <!-- Zaktualizowany Action Sheet z opcją COPY_TEXT -->
+    <!-- Zaktualizowany Action Sheet -->
     <div id="custom-action-sheet" class="action-sheet">
-        <div class="reaction-row">
+        <div class="reaction-row" id="reaction-row-1">
             <span onclick="addReaction('👍')">👍</span>
             <span onclick="addReaction('👎')">👎</span>
             <span onclick="addReaction('🙂')">🙂</span>
             <span onclick="addReaction('😂')">😂</span>
             <span onclick="addReaction('♥')">♥</span>
         </div>
-        <div class="reaction-row" style="border-top: none; padding-top: 0;">
+        <div class="reaction-row" id="reaction-row-2" style="border-top: none; padding-top: 0;">
             <span onclick="addReaction('🔥')">🔥</span>
             <span onclick="addReaction('💀')">💀</span>
             <span onclick="addReaction('⚠')">⚠</span>
@@ -263,6 +265,7 @@
         </div>
         
         <button class="action-btn" id="action-copy" style="display:none; color:#00ffcc; border-color:#333;">COPY_TEXT</button>
+        <button class="action-btn" id="action-paste" style="display:none; color:#00ffcc; border-color:#333;">PASTE_FROM_CLIPBOARD</button>
         <button class="action-btn save" id="action-save" style="display:none;">DOWNLOAD_ASSET</button>
         <button class="action-btn delete" id="action-delete">PURGE_DATA</button>
         <button class="action-btn cancel" id="action-cancel">CANCEL</button>
@@ -274,7 +277,6 @@
             if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); 
         });
 
-        // SYSTEMOWY BŁYSK LED (WIPE)
         function flashPurgeLed() {
             const led = document.getElementById('purge-led');
             if(led) {
@@ -317,13 +319,20 @@
 
         function escapeHTML(str) { return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])); }
         function replaceEmojis(text) { let res = text; for (const [emoji, svg] of Object.entries(emojiMap)) { const regex = new RegExp(emoji, 'g'); res = res.replace(regex, svg); } return res; }
+        
+        function linkify(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return text.replace(urlRegex, function(url) {
+                return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+            });
+        }
 
         function playTerminalBeep(silent = false) { try { if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } if (audioCtx.state === 'suspended') audioCtx.resume(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); const volume = silent ? 0 : 0.05; gain.gain.setValueAtTime(volume, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.1); } catch (e) {} }
         function playKeyClick() { try { if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } if (audioCtx.state === 'suspended') audioCtx.resume(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(1200, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.05); const volume = 0.02; gain.gain.setValueAtTime(volume, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.05); } catch (e) {} }
         function playSendBeep() { try { if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } if (audioCtx.state === 'suspended') audioCtx.resume(); const osc1 = audioCtx.createOscillator(); const gain1 = audioCtx.createGain(); osc1.type = 'square'; osc1.frequency.setValueAtTime(1200, audioCtx.currentTime); gain1.gain.setValueAtTime(0.05, audioCtx.currentTime); gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1); const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain(); osc2.type = 'square'; osc2.frequency.setValueAtTime(1800, audioCtx.currentTime + 0.1); gain2.gain.setValueAtTime(0, audioCtx.currentTime); gain2.gain.setValueAtTime(0.05, audioCtx.currentTime + 0.1); gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2); osc1.connect(gain1); gain1.connect(audioCtx.destination); osc2.connect(gain2); gain2.connect(audioCtx.destination); osc1.start(); osc1.stop(audioCtx.currentTime + 0.1); osc2.start(audioCtx.currentTime + 0.1); osc2.stop(audioCtx.currentTime + 0.2); } catch (e) {} }
         
         function playGlitchSound() { 
-            flashPurgeLed(); // <-- Dioda LED sprzężona z dźwiękiem destrukcji
+            flashPurgeLed(); 
             try { if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } if (audioCtx.state === 'suspended') audioCtx.resume(); const now = audioCtx.currentTime; const osc = audioCtx.createOscillator(); osc.type = 'sawtooth'; const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.05, now); gain.gain.setValueAtTime(0, now + 0.04); gain.gain.setValueAtTime(0.05, now + 0.08); gain.gain.setValueAtTime(0, now + 0.12); gain.gain.setValueAtTime(0.08, now + 0.15); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35); osc.frequency.setValueAtTime(600, now); osc.frequency.setValueAtTime(1500, now + 0.04); osc.frequency.setValueAtTime(300, now + 0.08); osc.frequency.setValueAtTime(2500, now + 0.15); osc.frequency.exponentialRampToValueAtTime(50, now + 0.35); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.4); } catch (e) {} 
         }
 
@@ -439,11 +448,58 @@
                 }); ghostKeyboard.appendChild(rowDiv); });
             }
 
-            function updateDisplay() { if (currentInputText.length > 0) messageDisplay.innerHTML = `> ${replaceEmojis(escapeHTML(currentInputText))}<span class="fake-cursor"></span>`; else messageDisplay.innerHTML = `> TRANSMIT_DATA...<span class="fake-cursor"></span>`; messageDisplay.scrollTop = messageDisplay.scrollHeight; }
-            messageDisplay.addEventListener('click', () => { if (ghostKeyboard.classList.contains('hidden') || ghostKeyboard.classList.contains('hiding')) { if (currentInputText.length === 0) currentLayout = layoutUpper; ghostKeyboard.classList.remove('hidden'); ghostKeyboard.classList.remove('hiding'); ghostKeyboard.classList.remove('animating'); void ghostKeyboard.offsetWidth; ghostKeyboard.classList.add('animating'); renderKeyboard(); if (currentInputText.length === 0) updateDisplay(); setTimeout(scrollToBottom, 100); } });
+            // NOWOŚĆ: Rejestracja długiego przytrzymania w POLU DO PISANIA
+            let pressTimerInput = null;
+            let isLongPressingInput = false;
+            const actionSheet = document.getElementById('custom-action-sheet');
+            
+            const startInput = (e) => {
+                isLongPressingInput = false;
+                if (pressTimerInput !== null) return;
+                pressTimerInput = setTimeout(() => {
+                    isLongPressingInput = true;
+                    if (navigator.vibrate) navigator.vibrate(40);
+                    
+                    document.getElementById('reaction-row-1').style.display = 'none';
+                    document.getElementById('reaction-row-2').style.display = 'none';
+                    document.getElementById('action-copy').style.display = 'none';
+                    document.getElementById('action-save').style.display = 'none';
+                    document.getElementById('action-delete').style.display = 'none';
+                    
+                    document.getElementById('action-paste').style.display = 'block'; // Pokazujemy WKLEJ
+                    
+                    actionSheet.classList.add('visible');
+                }, 500);
+            };
+            const cancelInput = () => { if (pressTimerInput !== null) { clearTimeout(pressTimerInput); pressTimerInput = null; } };
+            
+            messageDisplay.addEventListener('touchstart', startInput, { passive: true });
+            messageDisplay.addEventListener('touchend', cancelInput);
+            messageDisplay.addEventListener('touchmove', cancelInput);
+            messageDisplay.addEventListener('mousedown', startInput);
+            messageDisplay.addEventListener('mouseup', cancelInput);
+            messageDisplay.addEventListener('mouseleave', cancelInput);
 
+            // Wyświetlanie klawiatury tylko po szybkim kliknięciu
+            messageDisplay.addEventListener('click', (e) => { 
+                if (isLongPressingInput) {
+                    isLongPressingInput = false;
+                    return; // Zignoruj kliknięcie, jeśli to było długie przytrzymanie
+                }
+                if (ghostKeyboard.classList.contains('hidden') || ghostKeyboard.classList.contains('hiding')) { 
+                    if (currentInputText.length === 0) currentLayout = layoutUpper; 
+                    ghostKeyboard.classList.remove('hidden'); ghostKeyboard.classList.remove('hiding'); ghostKeyboard.classList.remove('animating'); void ghostKeyboard.offsetWidth; ghostKeyboard.classList.add('animating'); renderKeyboard(); 
+                    if (currentInputText.length === 0) updateDisplay(); 
+                    setTimeout(scrollToBottom, 100); 
+                } 
+            });
+
+            function updateDisplay() { if (currentInputText.length > 0) messageDisplay.innerHTML = `> ${linkify(replaceEmojis(escapeHTML(currentInputText)))}<span class="fake-cursor"></span>`; else messageDisplay.innerHTML = `> TRANSMIT_DATA...<span class="fake-cursor"></span>`; messageDisplay.scrollTop = messageDisplay.scrollHeight; }
+            
             const burnBtn = document.getElementById('burn-btn'); let isBurnMode = false; burnBtn.addEventListener('click', () => { isBurnMode = !isBurnMode; if(isBurnMode) { burnBtn.classList.add('active'); playTerminalBeep(false); } else { burnBtn.classList.remove('active'); } });
-            const actionSheet = document.getElementById('custom-action-sheet'); const actionSave = document.getElementById('action-save'); const actionDelete = document.getElementById('action-delete'); const actionCancel = document.getElementById('action-cancel'); const actionCopy = document.getElementById('action-copy');
+            
+            const actionSave = document.getElementById('action-save'); const actionDelete = document.getElementById('action-delete'); const actionCancel = document.getElementById('action-cancel'); const actionCopy = document.getElementById('action-copy'); const actionPaste = document.getElementById('action-paste');
+            
             function formatTime(isoString) { const date = new Date(isoString); return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
 
             startChatBtn.addEventListener('click', async () => {
@@ -527,7 +583,7 @@
                 const msgDate = new Date(msg.created_at).toLocaleDateString(); if (msgDate !== lastDate) { const dateDiv = document.createElement('div'); dateDiv.className = 'date-divider'; dateDiv.textContent = (msgDate === new Date().toLocaleDateString()) ? '>> LOG: TODAY' : `>> LOG: ${msgDate}`; messagesList.appendChild(dateDiv); lastDate = msgDate; }
                 const div = document.createElement('div'); div.className = `message ${msg.sender === currentUser ? 'outgoing' : 'incoming'}`; if (msg.sender === 'SYSTEM') div.className = 'message incoming'; div.setAttribute('data-id', msg.id); const contentDiv = document.createElement('div');
                 if (actualType === 'intruder') { const hpKey = await generateHoneypotKey(currentUser); const decryptedUrl = await decryptWithKey(msg.content, hpKey); contentDiv.className = "corrupted"; contentDiv.style.color = "#ff003c"; contentDiv.innerHTML = `<strong>[!] SYSTEM ALERT: ZAREJESTROWANO INTRUZA [!]</strong><br>Błędny PIN podany 3 razy.<br>`; if (decryptedUrl !== "CORRUPT_DATA") { const img = document.createElement('img'); img.src = decryptedUrl; img.style.border = "2px solid #ff003c"; img.style.marginTop = "10px"; contentDiv.appendChild(img); } setupLongPress(div, msg, 'media'); } 
-                else { const decryptedData = await decryptData(msg.content); if (decryptedData === "CORRUPT_DATA") { contentDiv.className = "corrupted"; contentDiv.textContent = "[ENCRYPTED_DATA_UNREADABLE]"; setupLongPress(div, msg, 'text', "[ENCRYPTED_DATA_UNREADABLE]"); } else if (actualType === 'image') { const img = document.createElement('img'); img.src = decryptedData; contentDiv.appendChild(img); setupLongPress(div, msg, 'media'); } else if (actualType === 'voice') { const audio = document.createElement('audio'); audio.controls = true; audio.src = decryptedData; contentDiv.appendChild(audio); setupLongPress(div, msg, 'media'); } else { contentDiv.innerHTML = replaceEmojis(escapeHTML(decryptedData)); setupLongPress(div, msg, 'text', decryptedData); } }
+                else { const decryptedData = await decryptData(msg.content); if (decryptedData === "CORRUPT_DATA") { contentDiv.className = "corrupted"; contentDiv.textContent = "[ENCRYPTED_DATA_UNREADABLE]"; setupLongPress(div, msg, 'text', "[ENCRYPTED_DATA_UNREADABLE]"); } else if (actualType === 'image') { const img = document.createElement('img'); img.src = decryptedData; contentDiv.appendChild(img); setupLongPress(div, msg, 'media'); } else if (actualType === 'voice') { const audio = document.createElement('audio'); audio.controls = true; audio.src = decryptedData; contentDiv.appendChild(audio); setupLongPress(div, msg, 'media'); } else { contentDiv.innerHTML = linkify(replaceEmojis(escapeHTML(decryptedData))); setupLongPress(div, msg, 'text', decryptedData); } }
                 div.appendChild(contentDiv); const reactDiv = document.createElement('div'); reactDiv.className = 'msg-reactions'; reactDiv.style.display = 'none'; div.appendChild(reactDiv); const timeDiv = document.createElement('div'); timeDiv.className = 'msg-time'; timeDiv.innerHTML = `[${formatTime(msg.created_at)}] <span class="msg-status" id="status-${msg.id}"></span>`; div.appendChild(timeDiv); messagesList.appendChild(div); renderReactions(div, msg.reactions); updateMessageStatusUI(msg); checkAndStartBurn(div, msg);
                 if (msg.sender !== currentUser && msg.sender !== 'SYSTEM' && (!msg.reactions || !msg.reactions.read)) { setTimeout(async () => { const currentReactions = msg.reactions || {}; currentReactions.read = true; await sbClient.from('messages').update({ reactions: currentReactions }).eq('id', msg.id); }, Math.random() * 2000); }
             }
@@ -546,15 +602,24 @@
             const stopRecording = (e) => { if (e) e.preventDefault(); if (mediaRecorder && mediaRecorder.state !== 'inactive') { mediaRecorder.stop(); voiceBtn.classList.remove('recording'); } };
             voiceBtn.addEventListener('mousedown', startRecording); voiceBtn.addEventListener('mouseup', stopRecording); voiceBtn.addEventListener('mouseleave', stopRecording); voiceBtn.addEventListener('touchstart', startRecording, {passive: false}); voiceBtn.addEventListener('touchend', stopRecording, {passive: false}); voiceBtn.addEventListener('touchcancel', stopRecording, {passive: false});
 
+            // Rejestracja długiego przytrzymania na standardowej WIADOMOŚCI
             function setupLongPress(element, messageData, msgType, textContent = "") { 
                 let pressTimer = null; 
                 const start = (e) => { 
                     if (e.target.closest('.msg-reactions')) return; 
+                    if (e.target.tagName === 'A') return; // Nie wywołuj menu po kliknięciu w zdekodowany link
                     if (pressTimer !== null) return; 
                     pressTimer = setTimeout(() => { 
                         selectedMessage = messageData; 
                         selectedMessageText = textContent; 
                         if (navigator.vibrate) navigator.vibrate(40); 
+                        
+                        // Konfiguracja panelu dla wiadomości (włącz reakcje, wyłącz PASTE)
+                        document.getElementById('reaction-row-1').style.display = 'flex';
+                        document.getElementById('reaction-row-2').style.display = 'flex';
+                        document.getElementById('action-paste').style.display = 'none';
+                        document.getElementById('action-delete').style.display = 'block';
+
                         actionSave.style.display = msgType === 'media' ? 'block' : 'none'; 
                         actionCopy.style.display = msgType === 'text' ? 'block' : 'none';
                         actionSheet.classList.add('visible'); 
@@ -566,11 +631,29 @@
 
             addReaction = async function(emoji) { if (!selectedMessage) return; actionSheet.classList.remove('visible'); let currentReactions = selectedMessage.reactions || {}; currentReactions[currentUser] = emoji; await sbClient.from('messages').update({ reactions: currentReactions }).eq('id', selectedMessage.id); selectedMessage = null; };
             actionCancel.addEventListener('click', () => { actionSheet.classList.remove('visible'); selectedMessage = null; });
+            
+            // Obsługa kliknięcia "KOPIUJ"
             actionCopy.addEventListener('click', async () => {
                 if (!selectedMessage) return; actionSheet.classList.remove('visible');
                 try { await navigator.clipboard.writeText(selectedMessageText); playTerminalBeep(true); } catch (err) {}
                 selectedMessage = null; selectedMessageText = "";
             });
+
+            // Obsługa kliknięcia "WKLEJ" (tylko w panelu wpisywania)
+            actionPaste.addEventListener('click', async () => {
+                actionSheet.classList.remove('visible');
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) {
+                        currentInputText += text;
+                        updateDisplay();
+                        playTerminalBeep(true);
+                    }
+                } catch (err) {
+                    alert('SYS_ERR: BRAK_DOSTĘPU_DO_SCHOWKA (Zezwól w ustawieniach przeglądarki)');
+                }
+            });
+
             actionSave.addEventListener('click', async () => { if (!selectedMessage || (selectedMessage.type !== 'image' && selectedMessage.type !== 'voice' && selectedMessage.type !== 'intruder' && !selectedMessage.type.includes('image_burn') && !selectedMessage.type.includes('voice_burn'))) return; actionSheet.classList.remove('visible'); try { let decryptedUrl = ""; if (selectedMessage.type === 'intruder') { const hpKey = await generateHoneypotKey(currentUser); decryptedUrl = await decryptWithKey(selectedMessage.content, hpKey); } else decryptedUrl = await decryptData(selectedMessage.content); if(decryptedUrl === "CORRUPT_DATA") throw new Error("Key Invalid"); const response = await fetch(decryptedUrl); const blob = await response.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const ext = selectedMessage.type.includes('voice') ? 'webm' : 'webp'; a.download = `ASSET_${Date.now()}.${ext}`; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url); } catch (err) { alert('DOWNLOAD_ERR: KEY_INVALID'); } });
             actionDelete.addEventListener('click', async () => { if (!selectedMessage) return; actionSheet.classList.remove('visible'); const el = document.querySelector(`[data-id="${selectedMessage.id}"]`); if (el && !el.classList.contains('glitch-out')) { playGlitchSound(); el.classList.add('glitch-out'); } await sbClient.from('messages').delete().eq('id', selectedMessage.id); selectedMessage = null; });
 
